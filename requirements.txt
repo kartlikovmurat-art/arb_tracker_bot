@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy>=1.4
+aiosqlite
+alembic
+aiogram
+python-dotenv
+pytest
+pytest-asyncio
