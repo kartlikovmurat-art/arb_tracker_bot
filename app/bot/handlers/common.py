@@ -14,6 +14,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app.bot.handlers.help_text import HELP_TEXT
 from app.bot.keyboards import main_menu
+from app.bot.keyboards.reply import main_reply_keyboard
 
 
 WELCOME_TEXT = (
@@ -53,7 +54,19 @@ def register(dp: Dispatcher) -> None:
 
 
 async def cmd_start(message: Message) -> None:
-    await message.answer(WELCOME_TEXT, reply_markup=main_menu())
+    # Показываем и inline-меню (кнопки под сообщением) и reply-меню
+    # (постоянная панель снизу экрана). Оба не мешают друг другу.
+    await message.answer(
+        WELCOME_TEXT,
+        reply_markup=main_menu(),
+    )
+    # Показываем панельку отдельным сообщением, чтобы Telegram принял её
+    # без сюрпризов (некоторые клиенты игнорируют reply_markup после edit).
+    await message.answer(
+        "👇  <b>Панель быстрого доступа</b> — закреплена снизу.\n"
+        "Можешь нажимать кнопки или писать команды.",
+        reply_markup=main_reply_keyboard(),
+    )
 
 
 async def cmd_menu(message: Message) -> None:
@@ -61,7 +74,10 @@ async def cmd_menu(message: Message) -> None:
 
 
 async def cmd_help(message: Message) -> None:
-    await message.answer(HELP_TEXT, reply_markup=main_menu())
+    await message.answer(
+        HELP_TEXT,
+        reply_markup=main_menu(),
+    )
 
 
 async def menu_home(callback: CallbackQuery) -> None:

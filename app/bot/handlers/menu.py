@@ -27,13 +27,33 @@ from app.bot.handlers._pagination_view import build_trades_view
 from app.bot.handlers.add_trade import TradeForm
 from app.bot.handlers.help_text import HELP_TEXT
 from app.bot.keyboards import (
+    BTN_ADD,
+    BTN_ANALYTICS,
+    BTN_EXPORT,
+    BTN_HELP,
+    BTN_STATS,
+    BTN_TRADES,
     add_trade_menu,
     analytics_menu,
     main_menu,
     trades_pager,
 )
+from app.bot.keyboards.reply import main_reply_keyboard
 
 logger = logging.getLogger(__name__)
+
+
+# Словарь «текст кнопки → имя действия». Используется в
+# ``reply_menu_router`` ниже: когда пользователь жмёт reply-кнопку,
+# Telegram отправляет боту message с текстом этой кнопки.
+REPLY_MENU_ACTIONS: dict[str, str] = {
+    BTN_ADD: "add",
+    BTN_TRADES: "trades",
+    BTN_STATS: "stats",
+    BTN_ANALYTICS: "analytics",
+    BTN_EXPORT: "export",
+    BTN_HELP: "help",
+}
 
 
 def register(dp: Dispatcher, api: ApiClient) -> None:
@@ -55,6 +75,14 @@ def register(dp: Dispatcher, api: ApiClient) -> None:
     ]
     for data, handler in handlers:
         dp.callback_query.register(handler, lambda c, d=data: c.data == d)
+
+    # Постоянная панель снизу экрана: ловим нажатия reply-кнопок
+    # по тексту сообщения. Регистрируем ОДИН хендлер на все тексты
+    # из REPLY_MENU_ACTIONS — внутри он роутит по словарю.
+    dp.message.register(
+        reply_menu_router,
+        lambda m: (m.text or "") in REPLY_MENU_ACTIONS,
+    )
 
 
 # ── helpers ──────────────────────────────────────────────────────────
@@ -283,3 +311,96 @@ async def _on_equity(
         format_equity_curve(data),
         reply_markup=analytics_menu(),
     )
+
+
+# ── Reply-клавиатура (постоянная панель снизу) ─────────────────────
+async def reply_menu_router(
+    message: Message,
+    state: FSMContext,
+    api: ApiClient,  # type: ignore[assignment]
+) -> None:
+    """Ловит нажатия reply-кнопок и роутит их к нужному действию.
+
+    Отличие от callback-handler'ов: reply-кнопка отправляет боту
+    обычный message с текстом кнопки. Поэтому:
+      * нельзя edit_text (сообщение новое) — используем answer()
+      * клавиатура снизу остаётся (мы её и так уже показали)
+      * inline-кнопки в сообщении используются для подменю
+    """
+    if message.text is None:
+        return
+    action = REPLY_MENU_ACTIONS.get(message.text)
+    if action is None:
+        return
+    # После клика по reply-кнопке сразу очищаем чат-буфер —
+    # чтобы старое сообщение с inline-кнопками не висело. Но
+    # edit'ить reply-message нельзя, поэтому просто шлём новое.
+    try:
+        if action == "add":
+            await message.answer(
+                "➕  <b>Добавить сделку</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Выбери способ:\n"
+                "  📝  <b>Пошаговый</b> — бот спросит всё по очереди.\n"
+                "  ⚡  <b>JSON</b> — одной строкой (для интеграций).",
+                reply_markup=add_trade_menu(),
+            )
+        elif action == "trades":
+            try:
+                trades = await api.list_trades()
+            except ApiError as exc:
+                await message.answer(f"❌ Не удалось получить сделки: {exc.detail or exc}")
+                return
+            text, keyboard = build_trades_view(trades, page=0)
+            await message.answer(
+                text,
+                reply_markup=keyboard or main_menu(),
+            )
+        elif action == "stats":
+            try:
+                data = await api.overall_stats()
+            except ApiError as exc:
+                await message.answer(f"❌ Ошибка: {exc.detail or exc}")
+                return
+            await message.answer(
+                format_overall_stats(data),
+                reply_markup=main_menu(),
+            )
+        elif action == "analytics":
+            await message.answer(
+                "📈  <b>Аналитика</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Разрезы по твоей истории:",
+                reply_markup=analytics_menu(),
+            )
+        elif action == "export":
+            await message.answer("⏳ Готовлю Excel-выгрузку…")
+            try:
+                data = await api.export_excel()
+            except ApiError as exc:
+                await message.answer(f"❌ Не удалось выгрузить: {exc.detail or exc}")
+                return
+            if not data:
+                await message.answer(
+                    "ℹ️  Выгрузка пуста — сделок пока нет.\n"
+                    "Добавь первую через ➕ в меню."
+                )
+                return
+            filename = f"trades_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            document = io.BytesIO(data)
+            document.name = filename
+            await message.answer_document(
+                document=document,
+                caption=(
+                    f"📤  <b>Экспорт готов!</b>\n"
+                    f"📎  {filename}\n"
+                    f"📦  {len(data)} байт"
+                ),
+            )
+        elif action == "help":
+            from app.bot.handlers.help_text import HELP_TEXT
+            await message.answer(HELP_TEXT, reply_markup=main_menu())
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("reply_menu_router error")
+        await message.answer(f"❌ Непредвиденная ошибка: {type(exc).__name__}: {exc}")
+
