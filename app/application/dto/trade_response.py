@@ -34,4 +34,5 @@ class TradeResponse(BaseModel):
     status: TradeStatus
     strategy: Optional[str] = None
     note: Optional[str] = None
+    telegram_user_id: int = 0
     created_at: datetime

@@ -29,12 +29,13 @@ def register(dp: Dispatcher, api: ApiClient) -> None:
 
 async def _fetch_trades(
     api: ApiClient,
+    user_id: int,
     *,
     coin: Optional[str] = None,
     exchange: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     try:
-        return await api.list_trades(coin=coin, exchange=exchange)
+        return await api.list_trades(user_id, coin=coin, exchange=exchange)
     except ApiError as exc:
         logger.warning("list_trades failed: %s", exc)
         raise
@@ -42,7 +43,8 @@ async def _fetch_trades(
 
 async def cmd_trades(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     try:
-        trades = await _fetch_trades(api)
+        uid = message.from_user.id if message.from_user else 0
+        trades = await _fetch_trades(api, uid)
     except ApiError as exc:
         await message.answer(f"❌ Не удалось получить сделки: {exc.detail or exc}")
         return
@@ -60,7 +62,8 @@ async def cmd_trades_id(
         await message.answer("Использование: <code>/trades_id 42</code>")
         return
     try:
-        trade = await api.get_trade(int(args))
+        uid = message.from_user.id if message.from_user else 0
+        trade = await api.get_trade(int(args), uid)
     except ApiError as exc:
         await message.answer(
             "❌ Сделка не найдена."
@@ -81,7 +84,8 @@ async def cmd_trades_coin(
         await message.answer("Использование: <code>/trades_coin BTC</code>")
         return
     try:
-        trades = await _fetch_trades(api, coin=coin.upper())
+        uid = message.from_user.id if message.from_user else 0
+        trades = await _fetch_trades(api, uid, coin=coin.upper())
     except ApiError as exc:
         await message.answer(f"❌ Ошибка: {exc.detail or exc}")
         return
@@ -101,7 +105,8 @@ async def cmd_trades_exchange(
         )
         return
     try:
-        trades = await _fetch_trades(api, exchange=exchange)
+        uid = message.from_user.id if message.from_user else 0
+        trades = await _fetch_trades(api, uid, exchange=exchange)
     except ApiError as exc:
         await message.answer(f"❌ Ошибка: {exc.detail or exc}")
         return

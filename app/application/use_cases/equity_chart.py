@@ -28,14 +28,13 @@ class GenerateEquityChartUseCase:
     def __init__(self, uow: UnitOfWork):
         self.uow = uow
 
-    async def execute(self) -> bytes:
+    async def execute(self, user_id: int = 0) -> bytes:
         async with self.uow:
-            trades = await self.uow.trades.get_all()
+            trades = await self.uow.trades.get_all(user_id=user_id)
         completed = [t for t in trades if t.status == TradeStatus.COMPLETED]
         completed.sort(key=lambda t: _to_dt(t.created_at))
 
         if not completed:
-            # Пустой график с подписью
             fig, ax = plt.subplots(figsize=(8, 4))
             ax.text(
                 0.5, 0.5,

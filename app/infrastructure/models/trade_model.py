@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Enum, Numeric, String, func
+from sqlalchemy import BigInteger, DateTime, Enum, Index, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.value_objects.trade_status import TradeStatus
@@ -13,6 +13,12 @@ class TradeModel(Base):
     __tablename__ = "trades"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+
+    # Владелец сделки (telegram user id). 0 — legacy / anonymous.
+    # Индекс — потому что 99% запросов фильтруют по нему.
+    telegram_user_id: Mapped[int] = mapped_column(
+        BigInteger, default=0, nullable=False, index=True
+    )
 
     coin: Mapped[str] = mapped_column(String(20))
 

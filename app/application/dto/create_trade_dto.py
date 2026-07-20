@@ -31,3 +31,6 @@ class CreateTradeDTO(BaseModel):
 
     strategy: Optional[str] = None
     note: Optional[str] = None
+
+    # Telegram user id владельца. По умолчанию 0 (legacy).
+    telegram_user_id: int = 0

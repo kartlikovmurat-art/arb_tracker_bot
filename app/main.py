@@ -51,6 +51,9 @@ app = FastAPI(
 )
 
 
+# Регистрируем /trades/search и /trades/{id}/complete ДО /trades/{id},
+# иначе FastAPI парсит "search" как trade_id.
+app.include_router(extras_router)
 app.include_router(trades_router)
 
 app.include_router(statistics_router)
@@ -62,7 +65,6 @@ app.include_router(daily_statistics_router)
 app.include_router(equity_curve_router)
 
 app.include_router(export_router)
-app.include_router(extras_router)
 app.include_router(webapp_router)
 
 # Статические файлы мини-приложения (CSS/JS, если появятся).

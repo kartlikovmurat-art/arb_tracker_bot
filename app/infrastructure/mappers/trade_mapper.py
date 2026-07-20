@@ -27,6 +27,7 @@ class TradeMapper:
             strategy=trade.strategy,
             note=trade.note,
             created_at=trade.created_at,
+            telegram_user_id=trade.telegram_user_id,
         )
 
     @staticmethod
@@ -51,4 +52,5 @@ class TradeMapper:
             note=model.note,
             id=model.id,
             created_at=model.created_at,
+            telegram_user_id=model.telegram_user_id or 0,
         )

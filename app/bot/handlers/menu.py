@@ -344,6 +344,7 @@ async def reply_menu_router(
     if message.text is None:
         return
     action = REPLY_MENU_ACTIONS.get(message.text)
+    user_id = message.from_user.id if message.from_user else 0
     if action is None:
         return
     # После клика по reply-кнопке сразу очищаем чат-буфер —
@@ -361,7 +362,7 @@ async def reply_menu_router(
             )
         elif action == "trades":
             try:
-                trades = await api.list_trades()
+                trades = await api.list_trades(user_id)
             except ApiError as exc:
                 await message.answer(f"❌ Не удалось получить сделки: {exc.detail or exc}")
                 return
@@ -372,7 +373,7 @@ async def reply_menu_router(
             )
         elif action == "stats":
             try:
-                data = await api.overall_stats()
+                data = await api.overall_stats(user_id)
             except ApiError as exc:
                 await message.answer(f"❌ Ошибка: {exc.detail or exc}")
                 return
@@ -390,7 +391,7 @@ async def reply_menu_router(
         elif action == "export":
             await message.answer("⏳ Готовлю Excel-выгрузку…")
             try:
-                data = await api.export_excel()
+                data = await api.export_excel(user_id)
             except ApiError as exc:
                 await message.answer(f"❌ Не удалось выгрузить: {exc.detail or exc}")
                 return
@@ -415,7 +416,7 @@ async def reply_menu_router(
             await message.answer(HELP_TEXT, reply_markup=main_menu())
         elif action == "last":
             try:
-                trades = await api.list_trades()
+                trades = await api.list_trades(user_id)
             except ApiError as exc:
                 await message.answer(f"❌ {exc.detail or exc}")
                 return
@@ -431,7 +432,7 @@ async def reply_menu_router(
         elif action == "today":
             from datetime import datetime, timedelta, timezone
             try:
-                trades = await api.list_trades()
+                trades = await api.list_trades(user_id)
             except ApiError as exc:
                 await message.answer(f"❌ {exc.detail or exc}")
                 return
@@ -457,7 +458,7 @@ async def reply_menu_router(
         elif action == "week":
             from datetime import datetime, timedelta, timezone
             try:
-                trades = await api.list_trades()
+                trades = await api.list_trades(user_id)
             except ApiError as exc:
                 await message.answer(f"❌ {exc.detail or exc}")
                 return
@@ -495,7 +496,7 @@ async def reply_menu_router(
         elif action == "backup":
             await message.answer("⏳ Готовлю бэкап…")
             try:
-                data = await api.backup_json()
+                data = await api.backup_json(user_id)
             except ApiError as exc:
                 await message.answer(f"❌ {exc.detail or exc}")
                 return

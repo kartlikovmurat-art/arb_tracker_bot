@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import current_user_id
 from app.application.dto.trade_request import TradeRequest
 from app.application.dto.trade_response import TradeResponse
 from app.application.factories.trade_factory import TradeFactory
@@ -34,21 +35,25 @@ async def get_session():
 async def create_trade(
     request: TradeRequest,
     session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(current_user_id),
 ):
+    # Если client не прислал telegram_user_id в body, берём из header.
+    if not request.telegram_user_id and user_id:
+        request = request.model_copy(update={"telegram_user_id": user_id})
     dto = request.to_dto()
     trade = TradeFactory.create(dto)
 
     use_case = CreateTradeUseCase(UnitOfWork(session))
-
     return await use_case.execute(trade)
 
 
 @router.get("/", response_model=list[TradeResponse])
 async def get_all_trades(
     session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(current_user_id),
 ):
     use_case = GetAllTradesUseCase(UnitOfWork(session))
-    return await use_case.execute()
+    return await use_case.execute(user_id=user_id)
 
 
 @router.get("/filter", response_model=list[TradeResponse])
@@ -58,10 +63,11 @@ async def filter_trades(
     status: TradeStatus | None = None,
     trade_type: TradeType | None = None,
     session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(current_user_id),
 ):
     use_case = FilterTradesUseCase(UnitOfWork(session))
-
     return await use_case.execute(
+        user_id=user_id,
         coin=coin,
         exchange=exchange,
         status=status,
@@ -73,17 +79,12 @@ async def filter_trades(
 async def get_trade(
     trade_id: int,
     session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(current_user_id),
 ):
     use_case = GetTradeUseCase(UnitOfWork(session))
-
-    trade = await use_case.execute(trade_id)
-
+    trade = await use_case.execute(trade_id, user_id=user_id)
     if trade is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Trade not found",
-        )
-
+        raise HTTPException(status_code=404, detail="Trade not found")
     return trade
 
 
@@ -92,23 +93,17 @@ async def update_trade(
     trade_id: int,
     request: TradeRequest,
     session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(current_user_id),
 ):
+    if not request.telegram_user_id and user_id:
+        request = request.model_copy(update={"telegram_user_id": user_id})
     dto = request.to_dto()
     trade = TradeFactory.create(dto)
 
     use_case = UpdateTradeUseCase(UnitOfWork(session))
-
-    updated = await use_case.execute(
-        trade_id,
-        trade,
-    )
-
+    updated = await use_case.execute(trade_id, trade, user_id=user_id)
     if updated is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Trade not found",
-        )
-
+        raise HTTPException(status_code=404, detail="Trade not found")
     return updated
 
 
@@ -116,11 +111,10 @@ async def update_trade(
 async def delete_trade(
     trade_id: int,
     session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(current_user_id),
 ):
     use_case = DeleteTradeUseCase(UnitOfWork(session))
-
-    await use_case.execute(trade_id)
-
-    return {
-        "message": "Trade deleted"
-    }
+    deleted = await use_case.execute(trade_id, user_id=user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    return {"message": "Trade deleted"}

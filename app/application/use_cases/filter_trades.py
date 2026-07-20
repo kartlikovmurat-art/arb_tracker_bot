@@ -9,6 +9,7 @@ class FilterTradesUseCase:
 
     async def execute(
         self,
+        user_id: int = 0,
         coin: str | None = None,
         exchange: str | None = None,
         status: TradeStatus | None = None,
@@ -16,6 +17,7 @@ class FilterTradesUseCase:
     ):
         async with self.uow:
             return await self.uow.trades.filter(
+                user_id=user_id,
                 coin=coin,
                 exchange=exchange,
                 status=status,

@@ -11,6 +11,7 @@ class UpdateTradeUseCase:
         self,
         trade_id: int,
         trade: Trade,
+        user_id: int = 0,
     ) -> Trade | None:
         trade = TradeCalculator.calculate(trade)
 
@@ -18,6 +19,6 @@ class UpdateTradeUseCase:
             updated = await self.uow.trades.update(
                 trade_id,
                 trade,
+                user_id=user_id,
             )
-
             return updated

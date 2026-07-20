@@ -30,7 +30,8 @@ def register(dp: Dispatcher, api: ApiClient) -> None:
 async def cmd_export(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     await message.answer("⏳ Готовлю Excel-выгрузку…")
     try:
-        data = await api.export_excel()
+        uid = message.from_user.id if message.from_user else 0
+        data = await api.export_excel(uid)
     except ApiError as exc:
         await message.answer(f"❌ Не удалось выгрузить: {exc.detail or exc}")
         return

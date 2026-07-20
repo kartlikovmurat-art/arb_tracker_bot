@@ -6,6 +6,6 @@ class GetAllTradesUseCase:
     def __init__(self, uow: UnitOfWork):
         self.uow = uow
 
-    async def execute(self) -> list[Trade]:
+    async def execute(self, user_id: int = 0) -> list[Trade]:
         async with self.uow:
-            return await self.uow.trades.get_all()
+            return await self.uow.trades.get_all(user_id=user_id)

@@ -5,9 +5,10 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import current_user_id
 from app.application.use_cases.backup_data import (
     ExportBackupUseCase,
     ImportTradesUseCase,
@@ -35,10 +36,11 @@ async def patch_trade(
     trade_id: int,
     updates: dict[str, Any],
     session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(current_user_id),
 ):
     """Меняет только те поля, которые пришли в ``updates``. Пересчитывает P/L."""
     use_case = PatchTradeUseCase(UnitOfWork(session))
-    trade = await use_case.execute(trade_id, updates)
+    trade = await use_case.execute(trade_id, updates, user_id=user_id)
     if trade is None:
         raise HTTPException(status_code=404, detail="Trade not found")
     return trade
@@ -49,10 +51,10 @@ async def patch_trade(
 async def complete_trade(
     trade_id: int,
     session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(current_user_id),
 ):
-    """Переводит сделку в COMPLETED, пересчитывает P/L и ROI."""
     use_case = CompleteTradeUseCase(UnitOfWork(session))
-    trade = await use_case.execute(trade_id)
+    trade = await use_case.execute(trade_id, user_id=user_id)
     if trade is None:
         raise HTTPException(status_code=404, detail="Trade not found")
     return trade
@@ -63,18 +65,20 @@ async def complete_trade(
 async def search_trades(
     q: str = Query(..., min_length=1, description="поисковый запрос"),
     session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(current_user_id),
 ):
-    """Полнотекстовый поиск по coin/exchange/strategy/note."""
     use_case = SearchTradesUseCase(UnitOfWork(session))
-    return await use_case.execute(q)
+    return await use_case.execute(q, user_id=user_id)
 
 
 # ── Бэкап ───────────────────────────────────────────────────────────
 @router.get("/backup")
-async def backup(session: AsyncSession = Depends(get_session)):
-    """Возвращает JSON-файл со всеми сделками."""
+async def backup(
+    session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(current_user_id),
+):
     use_case = ExportBackupUseCase(UnitOfWork(session))
-    payload = await use_case.execute()
+    payload = await use_case.execute(user_id=user_id)
     return Response(
         content=payload,
         media_type="application/json",
@@ -89,34 +93,29 @@ async def backup(session: AsyncSession = Depends(get_session)):
 async def import_trades(
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(current_user_id),
 ):
-    """Принимает JSON-файл (формат /backup) и вставляет сделки,
-    пропуская дубликаты по id."""
     content = await file.read()
     try:
         payload = content.decode("utf-8")
-        json.loads(payload)  # валидация
+        json.loads(payload)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=f"Bad JSON: {exc}")
     use_case = ImportTradesUseCase(UnitOfWork(session))
-    inserted, skipped = await use_case.execute(payload)
-    return {
-        "status": "ok",
-        "inserted": inserted,
-        "skipped": skipped,
-    }
+    inserted, skipped = await use_case.execute(payload, user_id=user_id)
+    return {"status": "ok", "inserted": inserted, "skipped": skipped}
 
 
 # ── Equity curve график PNG ────────────────────────────────────────
 @router.get("/statistics/equity/chart")
-async def equity_chart(session: AsyncSession = Depends(get_session)):
-    """PNG-картинка с кривой доходности по датам."""
+async def equity_chart(
+    session: AsyncSession = Depends(get_session),
+    user_id: int = Depends(current_user_id),
+):
     use_case = GenerateEquityChartUseCase(UnitOfWork(session))
-    blob = await use_case.execute()
+    blob = await use_case.execute(user_id=user_id)
     return Response(
         content=blob,
         media_type="image/png",
-        headers={
-            "Content-Disposition": 'inline; filename="equity_curve.png"'
-        },
+        headers={"Content-Disposition": 'inline; filename="equity_curve.png"'},
     )

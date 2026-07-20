@@ -8,19 +8,15 @@ class GetStrategyStatisticsUseCase:
     def __init__(self, uow: UnitOfWork):
         self.uow = uow
 
-    async def execute(self):
+    async def execute(self, user_id: int = 0):
         async with self.uow:
-            trades = await self.uow.trades.get_all()
+            trades = await self.uow.trades.get_all(user_id=user_id)
 
         statistics = {}
-
         for trade in trades:
-
             if trade.status != TradeStatus.COMPLETED:
                 continue
-
             strategy = trade.strategy or "Unknown"
-
             if strategy not in statistics:
                 statistics[strategy] = {
                     "trades": 0,
@@ -29,22 +25,15 @@ class GetStrategyStatisticsUseCase:
                     "roi_sum": Decimal("0"),
                     "volume": Decimal("0"),
                 }
-
             statistics[strategy]["trades"] += 1
             statistics[strategy]["profit"] += trade.profit
             statistics[strategy]["roi_sum"] += trade.roi
             statistics[strategy]["volume"] += trade.amount
 
         for strategy in statistics.values():
-
             if strategy["trades"] > 0:
                 strategy["average_roi"] = (
-                    strategy["roi_sum"]
-                    / strategy["trades"]
-                ).quantize(
-                    Decimal("0.01")
-                )
-
+                    strategy["roi_sum"] / strategy["trades"]
+                ).quantize(Decimal("0.01"))
             del strategy["roi_sum"]
-
         return statistics

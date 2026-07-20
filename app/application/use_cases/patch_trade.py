@@ -20,19 +20,18 @@ class PatchTradeUseCase:
         self,
         trade_id: int,
         updates: Mapping[str, Any],
+        user_id: int = 0,
     ):
         async with self.uow:
-            trade = await self.uow.trades.get_by_id(trade_id)
+            trade = await self.uow.trades.get_by_id(trade_id, user_id=user_id)
             if trade is None:
                 return None
 
-            # Применяем изменения
             for key, value in updates.items():
                 if value is None:
                     continue
                 if not hasattr(trade, key):
                     continue
-                # Decimal-поля — конвертируем
                 current = getattr(trade, key, None)
                 if isinstance(current, Decimal) and not isinstance(value, Decimal):
                     try:
@@ -41,6 +40,5 @@ class PatchTradeUseCase:
                         continue
                 setattr(trade, key, value)
 
-            # Пересчёт P/L
             trade = TradeCalculator.calculate(trade)
-            return await self.uow.trades.update(trade_id, trade)
+            return await self.uow.trades.update(trade_id, trade, user_id=user_id)

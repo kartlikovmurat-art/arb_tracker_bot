@@ -24,5 +24,6 @@ class TradeFactory:
             status=dto.status,
             strategy=dto.strategy,
             note=dto.note,
+            telegram_user_id=dto.telegram_user_id,
             created_at=datetime.now(timezone.utc),
         )

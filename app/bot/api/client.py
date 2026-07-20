@@ -5,13 +5,11 @@
 логике идёт через этот тонкий wrapper. Если API поменяется, чинить
 надо только здесь.
 
-Особенности:
-    * Один ``httpx.AsyncClient`` создаётся один раз в ``start()`` и
-      закрывается в ``aclose()``. Не плодим сокеты на каждый вызов.
-    * Все методы возвращают распарсенный JSON (``dict`` / ``list``)
-      либо бросают ``ApiError`` с человеко-читаемой причиной.
-    * Таймаут умеренный (10 секунд) — если API висит, бот не должен
-      зависать вместе с ним.
+Изоляция пользователей:
+    Каждый публичный метод принимает ``user_id`` — telegram user id
+    пользователя, от имени которого делается запрос. Клиент добавляет
+    его в ``X-Telegram-User-Id`` header, сервер использует для
+    фильтрации данных. Без ``user_id`` (``0``) — режим legacy/админ.
 """
 from __future__ import annotations
 
@@ -25,13 +23,15 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
-class ApiError(RuntimeError):
-    """Любая ошибка при общении с локальным API.
+def _user_header(user_id: int) -> dict[str, str]:
+    """Собирает заголовок с telegram user id для запроса к API."""
+    if not user_id:
+        return {}
+    return {"X-Telegram-User-Id": str(int(user_id))}
 
-    Атрибуты:
-        status_code: HTTP-статус, если ответ был получен (иначе ``None``).
-        detail: текстовое описание от сервера или от httpx.
-    """
+
+class ApiError(RuntimeError):
+    """Любая ошибка при общении с локальным API."""
 
     def __init__(
         self,
@@ -46,19 +46,13 @@ class ApiError(RuntimeError):
 
 
 class TradePayload(dict):
-    """Словарь-сделка, отправляемая в ``POST /trades/``.
-
-    Использовать как обычный ``dict`` — расширение нужно только
-    ради type hint'а в IDE.
-    """
+    """Словарь-сделка, отправляемая в ``POST /trades/``."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._normalise_enums()
 
     def _normalise_enums(self) -> None:
-        # API ожидает enum-значения в верхнем регистре и с подчёркиваниями.
-        # Пользователь может прислать «cex-cex» или «CEX CEX» — нормализуем.
         if "trade_type" in self and isinstance(self["trade_type"], str):
             self["trade_type"] = (
                 self["trade_type"].replace("-", "_").replace(" ", "_").upper()
@@ -68,7 +62,6 @@ class TradePayload(dict):
 
     @classmethod
     def from_raw(cls, raw: Mapping[str, Any]) -> "TradePayload":
-        """Создаёт ``TradePayload`` из сырого dict, с конвертацией Decimal-строк."""
         data: dict[str, Any] = {}
         for key, value in raw.items():
             if isinstance(value, Decimal):
@@ -92,7 +85,6 @@ class ApiClient:
         self._client: Optional[httpx.AsyncClient] = None
 
     async def start(self) -> None:
-        """Ленивая инициализация HTTP-клиента."""
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
                 base_url=self._base_url,
@@ -120,38 +112,64 @@ class ApiClient:
     # ------------------------------------------------------------------ #
     # Внутренние хелперы
     # ------------------------------------------------------------------ #
-    async def _get(self, path: str, **params: Any) -> Any:
+    async def _get(self, path: str, *, user_id: int = 0, **params: Any) -> Any:
         await self.start()
         assert self._client is not None
         try:
-            response = await self._client.get(path, params=params)
+            response = await self._client.get(
+                path, params=params, headers=_user_header(user_id)
+            )
         except httpx.HTTPError as exc:
-            raise ApiError(
-                f"Сеть: {type(exc).__name__}: {exc}"
-            ) from exc
+            raise ApiError(f"Сеть: {type(exc).__name__}: {exc}") from exc
         return self._parse(response)
 
-    async def _patch(self, path: str, json: Mapping[str, Any]) -> Any:
+    async def _patch(
+        self, path: str, json: Mapping[str, Any], *, user_id: int = 0
+    ) -> Any:
         await self.start()
         assert self._client is not None
         try:
-            response = await self._client.patch(path, json=dict(json))
+            response = await self._client.patch(
+                path, json=dict(json), headers=_user_header(user_id)
+            )
         except httpx.HTTPError as exc:
-            raise ApiError(
-                f"Сеть: {type(exc).__name__}: {exc}"
-            ) from exc
+            raise ApiError(f"Сеть: {type(exc).__name__}: {exc}") from exc
         return self._parse(response)
 
-    async def _post(self, path: str, json: Mapping[str, Any]) -> Any:
+    async def _post(
+        self, path: str, json: Mapping[str, Any], *, user_id: int = 0
+    ) -> Any:
         await self.start()
         assert self._client is not None
         try:
-            response = await self._client.post(path, json=dict(json))
+            response = await self._client.post(
+                path, json=dict(json), headers=_user_header(user_id)
+            )
         except httpx.HTTPError as exc:
-            raise ApiError(
-                f"Сеть: {type(exc).__name__}: {exc}"
-            ) from exc
+            raise ApiError(f"Сеть: {type(exc).__name__}: {exc}") from exc
         return self._parse(response)
+
+    async def _delete(self, path: str, *, user_id: int = 0) -> Any:
+        await self.start()
+        assert self._client is not None
+        try:
+            response = await self._client.delete(
+                path, headers=_user_header(user_id)
+            )
+        except httpx.HTTPError as exc:
+            raise ApiError(f"Сеть: {type(exc).__name__}: {exc}") from exc
+        if response.status_code >= 400:
+            raise ApiError(
+                f"API {response.status_code}",
+                status_code=response.status_code,
+                detail=response.text,
+            )
+        if not response.content:
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
     @staticmethod
     def _parse(response: httpx.Response) -> Any:
@@ -161,7 +179,7 @@ class ApiClient:
                 body = response.json()
                 if isinstance(body, dict) and "detail" in body:
                     detail = str(body["detail"])
-            except Exception:  # noqa: BLE001 — JSON может быть пустым
+            except Exception:  # noqa: BLE001
                 pass
             raise ApiError(
                 f"API {response.status_code}: {detail}",
@@ -173,22 +191,20 @@ class ApiClient:
         try:
             return response.json()
         except ValueError as exc:
-            raise ApiError(
-                f"API вернул невалидный JSON: {exc}"
-            ) from exc
+            raise ApiError(f"API вернул невалидный JSON: {exc}") from exc
 
     # ------------------------------------------------------------------ #
     # Trades
     # ------------------------------------------------------------------ #
     async def list_trades(
         self,
+        user_id: int = 0,
         *,
         coin: Optional[str] = None,
         exchange: Optional[str] = None,
         status: Optional[str] = None,
         trade_type: Optional[str] = None,
     ) -> list[dict[str, Any]]:
-        """Список сделок с опциональной фильтрацией."""
         params: dict[str, str] = {}
         if coin:
             params["coin"] = coin
@@ -200,54 +216,51 @@ class ApiClient:
             params["trade_type"] = (
                 trade_type.replace("-", "_").replace(" ", "_").upper()
             )
-        return await self._get("/trades/filter", **params)  # type: ignore[return-value]
+        return await self._get("/trades/filter", user_id=user_id, **params)  # type: ignore[return-value]
 
-    async def get_trade(self, trade_id: int) -> dict[str, Any]:
-        return await self._get(f"/trades/{trade_id}")
+    async def get_trade(self, trade_id: int, user_id: int = 0) -> dict[str, Any]:
+        return await self._get(f"/trades/{trade_id}", user_id=user_id)
 
     async def create_trade(
-        self, payload: Mapping[str, Any]
+        self, payload: Mapping[str, Any], user_id: int = 0
     ) -> dict[str, Any]:
-        """Создаёт сделку. На вход — dict, на выход — dict от API."""
-        return await self._post("/trades/", dict(payload))  # type: ignore[return-value]
+        return await self._post("/trades/", dict(payload), user_id=user_id)  # type: ignore[return-value]
 
     async def patch_trade(
-        self, trade_id: int, updates: Mapping[str, Any]
+        self,
+        trade_id: int,
+        updates: Mapping[str, Any],
+        user_id: int = 0,
     ) -> dict[str, Any]:
-        """Частично обновляет сделку — только указанные поля."""
-        return await self._patch(f"/trades/{trade_id}", dict(updates))  # type: ignore[return-value]
+        return await self._patch(  # type: ignore[return-value]
+            f"/trades/{trade_id}", dict(updates), user_id=user_id
+        )
 
-    async def delete_trade(self, trade_id: int) -> None:
-        await self.start()
-        assert self._client is not None
-        try:
-            response = await self._client.delete(f"/trades/{trade_id}")
-        except httpx.HTTPError as exc:
-            raise ApiError(f"Сеть: {type(exc).__name__}: {exc}") from exc
-        if response.status_code >= 400:
-            raise ApiError(
-                f"API {response.status_code}",
-                status_code=response.status_code,
-                detail=response.text,
-            )
+    async def delete_trade(self, trade_id: int, user_id: int = 0) -> None:
+        await self._delete(f"/trades/{trade_id}", user_id=user_id)
 
-    async def complete_trade(self, trade_id: int) -> dict[str, Any]:
-        """Переводит сделку PENDING → COMPLETED с пересчётом P/L."""
-        return await self._post(f"/trades/{trade_id}/complete", {})  # type: ignore[return-value]
+    async def complete_trade(
+        self, trade_id: int, user_id: int = 0
+    ) -> dict[str, Any]:
+        return await self._post(  # type: ignore[return-value]
+            f"/trades/{trade_id}/complete", {}, user_id=user_id
+        )
 
-    async def search_trades(self, query: str) -> list[dict[str, Any]]:
-        """Полнотекстовый поиск по сделкам."""
-        return await self._get("/trades/search", q=query)  # type: ignore[return-value]
+    async def search_trades(
+        self, query: str, user_id: int = 0
+    ) -> list[dict[str, Any]]:
+        return await self._get("/trades/search", user_id=user_id, q=query)  # type: ignore[return-value]
 
     # ------------------------------------------------------------------ #
     # Backup & Import
     # ------------------------------------------------------------------ #
-    async def backup_json(self) -> bytes:
-        """Скачивает JSON-бэкап всей базы."""
+    async def backup_json(self, user_id: int = 0) -> bytes:
         await self.start()
         assert self._client is not None
         try:
-            response = await self._client.get("/backup")
+            response = await self._client.get(
+                "/backup", headers=_user_header(user_id)
+            )
         except httpx.HTTPError as exc:
             raise ApiError(f"Сеть: {type(exc).__name__}: {exc}") from exc
         if response.status_code >= 400:
@@ -258,25 +271,28 @@ class ApiClient:
             )
         return response.content
 
-    async def import_json(self, payload: bytes) -> dict[str, Any]:
-        """Загружает JSON-бэкап в БД."""
+    async def import_json(
+        self, payload: bytes, user_id: int = 0
+    ) -> dict[str, Any]:
         await self.start()
         assert self._client is not None
         try:
             response = await self._client.post(
                 "/import",
                 files={"file": ("backup.json", payload, "application/json")},
+                headers=_user_header(user_id),
             )
         except httpx.HTTPError as exc:
             raise ApiError(f"Сеть: {type(exc).__name__}: {exc}") from exc
         return self._parse(response)  # type: ignore[return-value]
 
-    async def equity_chart(self) -> bytes:
-        """Скачивает PNG-график equity curve."""
+    async def equity_chart(self, user_id: int = 0) -> bytes:
         await self.start()
         assert self._client is not None
         try:
-            response = await self._client.get("/statistics/equity/chart")
+            response = await self._client.get(
+                "/statistics/equity/chart", headers=_user_header(user_id)
+            )
         except httpx.HTTPError as exc:
             raise ApiError(f"Сеть: {type(exc).__name__}: {exc}") from exc
         if response.status_code >= 400:
@@ -290,40 +306,39 @@ class ApiClient:
     # ------------------------------------------------------------------ #
     # Statistics
     # ------------------------------------------------------------------ #
-    async def overall_stats(self) -> dict[str, Any]:
-        return await self._get("/statistics/")  # type: ignore[return-value]
+    async def overall_stats(self, user_id: int = 0) -> dict[str, Any]:
+        return await self._get("/statistics/", user_id=user_id)  # type: ignore[return-value]
 
-    async def coin_stats(self) -> dict[str, dict[str, Any]]:
-        return await self._get("/statistics/coins/")  # type: ignore[return-value]
+    async def coin_stats(self, user_id: int = 0) -> dict[str, dict[str, Any]]:
+        return await self._get("/statistics/coins/", user_id=user_id)  # type: ignore[return-value]
 
-    async def monthly_stats(self) -> dict[str, dict[str, Any]]:
-        return await self._get("/statistics/monthly/")  # type: ignore[return-value]
+    async def monthly_stats(self, user_id: int = 0) -> dict[str, dict[str, Any]]:
+        return await self._get("/statistics/monthly/", user_id=user_id)  # type: ignore[return-value]
 
-    async def daily_stats(self) -> dict[str, dict[str, Any]]:
-        return await self._get("/statistics/daily/")  # type: ignore[return-value]
+    async def daily_stats(self, user_id: int = 0) -> dict[str, dict[str, Any]]:
+        return await self._get("/statistics/daily/", user_id=user_id)  # type: ignore[return-value]
 
-    async def exchange_stats(self) -> dict[str, dict[str, Any]]:
-        return await self._get("/statistics/exchanges/")  # type: ignore[return-value]
+    async def exchange_stats(self, user_id: int = 0) -> dict[str, dict[str, Any]]:
+        return await self._get("/statistics/exchanges/", user_id=user_id)  # type: ignore[return-value]
 
-    async def strategy_stats(self) -> dict[str, dict[str, Any]]:
-        return await self._get("/statistics/strategies/")  # type: ignore[return-value]
+    async def strategy_stats(self, user_id: int = 0) -> dict[str, dict[str, Any]]:
+        return await self._get("/statistics/strategies/", user_id=user_id)  # type: ignore[return-value]
 
-    async def equity_curve(self) -> list[dict[str, Any]]:
-        return await self._get("/statistics/equity/")  # type: ignore[return-value]
+    async def equity_curve(self, user_id: int = 0) -> list[dict[str, Any]]:
+        return await self._get("/statistics/equity/", user_id=user_id)  # type: ignore[return-value]
 
     # ------------------------------------------------------------------ #
     # Export
     # ------------------------------------------------------------------ #
-    async def export_excel(self) -> bytes:
-        """Скачивает Excel-отчёт. Возвращает сырые байты файла."""
+    async def export_excel(self, user_id: int = 0) -> bytes:
         await self.start()
         assert self._client is not None
         try:
-            response = await self._client.get("/export/excel")
+            response = await self._client.get(
+                "/export/excel", headers=_user_header(user_id)
+            )
         except httpx.HTTPError as exc:
-            raise ApiError(
-                f"Сеть: {type(exc).__name__}: {exc}"
-            ) from exc
+            raise ApiError(f"Сеть: {type(exc).__name__}: {exc}") from exc
         if response.status_code >= 400:
             raise ApiError(
                 f"API {response.status_code}: {response.text}",
@@ -334,5 +349,4 @@ class ApiClient:
 
 
 def create_api_client(base_url: str) -> ApiClient:
-    """Фабрика для удобства. Создаёт и возвращает (не стартует)."""
     return ApiClient(base_url=base_url)

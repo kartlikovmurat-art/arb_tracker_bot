@@ -1,4 +1,4 @@
-"""Бэкап всей базы в JSON и импорт обратно."""
+"""Бэкап базы в JSON и импорт обратно."""
 from __future__ import annotations
 
 import json
@@ -6,9 +6,10 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
+from sqlalchemy import select
+
 from app.infrastructure.models.trade_model import TradeModel
 from app.infrastructure.unit_of_work import UnitOfWork
-from sqlalchemy import select
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -18,15 +19,9 @@ def _to_jsonable(obj: Any) -> Any:
         return obj.isoformat()
     if isinstance(obj, (str, int, float, bool)) or obj is None:
         return obj
-    if isinstance(obj, str_enum_like := getattr(obj, "value", None)):
-        return str_enum_like
-    # Last resort: enum
-    try:
-        import enum
-        if isinstance(obj, enum.Enum):
-            return obj.value
-    except Exception:  # noqa: BLE001
-        pass
+    val = getattr(obj, "value", None)
+    if val is not None:
+        return str(val)
     raise TypeError(f"Cannot serialize {type(obj)}")
 
 
@@ -35,9 +30,11 @@ class ExportBackupUseCase:
     def __init__(self, uow: UnitOfWork):
         self.uow = uow
 
-    async def execute(self) -> str:
+    async def execute(self, user_id: int = 0) -> str:
         async with self.uow:
             stmt = select(TradeModel).order_by(TradeModel.created_at)
+            if user_id:
+                stmt = stmt.where(TradeModel.telegram_user_id == user_id)
             result = await self.uow.session.execute(stmt)
             models = list(result.scalars().all())
             data = {
@@ -61,24 +58,20 @@ class ImportTradesUseCase:
     def __init__(self, uow: UnitOfWork):
         self.uow = uow
 
-    async def execute(self, payload: str) -> tuple[int, int]:
+    async def execute(self, payload: str, user_id: int = 0) -> tuple[int, int]:
         data = json.loads(payload)
         trades = data.get("trades", [])
         inserted = 0
         skipped = 0
         async with self.uow:
             for raw in trades:
-                # Пропускаем записи без id (дубликаты по timestamp+полям)
                 existing_id = raw.get("id")
                 if existing_id is not None:
-                    stmt = select(TradeModel).where(
-                        TradeModel.id == existing_id
-                    )
+                    stmt = select(TradeModel).where(TradeModel.id == existing_id)
                     found = (await self.uow.session.execute(stmt)).scalar_one_or_none()
                     if found is not None:
                         skipped += 1
                         continue
-                # Создаём модель
                 obj = TradeModel()
                 for col in TradeModel.__table__.columns:
                     val = raw.get(col.name)
@@ -86,6 +79,8 @@ class ImportTradesUseCase:
                         setattr(obj, col.name, None)
                     elif val is not None:
                         setattr(obj, col.name, val)
+                # При импорте ставим владельцем текущего пользователя.
+                obj.telegram_user_id = user_id
                 self.uow.session.add(obj)
                 inserted += 1
             await self.uow.session.commit()

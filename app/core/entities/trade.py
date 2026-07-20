@@ -37,6 +37,9 @@ class Trade:
 
     id: Optional[int] = None
 
+    # Telegram user id владельца сделки. 0 — анонимный / legacy.
+    telegram_user_id: int = 0
+
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     profit: Decimal = Decimal("0")
@@ -51,6 +54,9 @@ class Trade:
 
         if self.sell_price <= 0:
             raise ValueError("Цена продажи должна быть больше 0.")
+
+        if self.telegram_user_id < 0:
+            raise ValueError("telegram_user_id не может быть отрицательным.")
 
     @property
     def investment(self) -> Decimal:

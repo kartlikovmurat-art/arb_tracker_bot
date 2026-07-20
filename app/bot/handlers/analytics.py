@@ -49,7 +49,8 @@ async def _safe(
 
 async def cmd_stats(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     try:
-        data = await api.overall_stats()
+        uid = message.from_user.id if message.from_user else 0
+        data = await api.overall_stats(uid)
     except ApiError as exc:
         await message.answer(f"❌ Ошибка: {exc.detail or exc}")
         return
@@ -58,7 +59,8 @@ async def cmd_stats(message: Message, api: ApiClient) -> None:  # type: ignore[a
 
 async def cmd_month(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     try:
-        data = await api.monthly_stats()
+        uid = message.from_user.id if message.from_user else 0
+        data = await api.monthly_stats(uid)
     except ApiError as exc:
         await message.answer(f"❌ Ошибка: {exc.detail or exc}")
         return
@@ -67,7 +69,8 @@ async def cmd_month(message: Message, api: ApiClient) -> None:  # type: ignore[a
 
 async def cmd_daily(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     try:
-        data = await api.daily_stats()
+        uid = message.from_user.id if message.from_user else 0
+        data = await api.daily_stats(uid)
     except ApiError as exc:
         await message.answer(f"❌ Ошибка: {exc.detail or exc}")
         return
@@ -76,7 +79,8 @@ async def cmd_daily(message: Message, api: ApiClient) -> None:  # type: ignore[a
 
 async def cmd_coin(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     try:
-        data = await api.coin_stats()
+        uid = message.from_user.id if message.from_user else 0
+        data = await api.coin_stats(uid)
     except ApiError as exc:
         await message.answer(f"❌ Ошибка: {exc.detail or exc}")
         return
@@ -85,7 +89,8 @@ async def cmd_coin(message: Message, api: ApiClient) -> None:  # type: ignore[as
 
 async def cmd_exchange(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     try:
-        data = await api.exchange_stats()
+        uid = message.from_user.id if message.from_user else 0
+        data = await api.exchange_stats(uid)
     except ApiError as exc:
         await message.answer(f"❌ Ошибка: {exc.detail or exc}")
         return
@@ -94,7 +99,8 @@ async def cmd_exchange(message: Message, api: ApiClient) -> None:  # type: ignor
 
 async def cmd_strategy(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     try:
-        data = await api.strategy_stats()
+        uid = message.from_user.id if message.from_user else 0
+        data = await api.strategy_stats(uid)
     except ApiError as exc:
         await message.answer(f"❌ Ошибка: {exc.detail or exc}")
         return
@@ -103,7 +109,8 @@ async def cmd_strategy(message: Message, api: ApiClient) -> None:  # type: ignor
 
 async def cmd_equity(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     try:
-        points = await api.equity_curve()
+        uid = message.from_user.id if message.from_user else 0
+        points = await api.equity_curve(uid)
     except ApiError as exc:
         await message.answer(f"❌ Ошибка: {exc.detail or exc}")
         return

@@ -32,7 +32,8 @@ def register(dp: Dispatcher, api: ApiClient) -> None:
 async def cmd_equity_chart(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     await message.answer("⏳ Рисую график…")
     try:
-        blob = await api.equity_chart()
+        uid = message.from_user.id if message.from_user else 0
+        blob = await api.equity_chart(uid)
     except ApiError as exc:
         await message.answer(f"❌ Не удалось: {exc.detail or exc}")
         return
@@ -63,7 +64,8 @@ async def cmd_search(message: Message, command: Any, api: ApiClient) -> None:  #
         )
         return
     try:
-        results = await api.search_trades(args)
+        uid = message.from_user.id if message.from_user else 0
+        results = await api.search_trades(args, user_id=uid)
     except ApiError as exc:
         await message.answer(f"❌ {exc.detail or exc}")
         return
@@ -111,7 +113,8 @@ async def cmd_goal(message: Message, command: Any, api: ApiClient) -> None:  # t
             )
             return
         try:
-            stats = await api.overall_stats()
+            uid = message.from_user.id if message.from_user else 0
+            stats = await api.overall_stats(uid)
         except ApiError as exc:
             await message.answer(f"❌ {exc.detail or exc}")
             return
@@ -148,7 +151,8 @@ async def cmd_goal(message: Message, command: Any, api: ApiClient) -> None:  # t
 # ── /last ────────────────────────────────────────────────────────
 async def cmd_last(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     try:
-        trades = await api.list_trades()
+        uid = message.from_user.id if message.from_user else 0
+        trades = await api.list_trades(uid)
     except ApiError as exc:
         await message.answer(f"❌ {exc.detail or exc}")
         return
@@ -182,7 +186,8 @@ async def _filter_by_period(
 
 async def cmd_today(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     try:
-        trades = await api.list_trades()
+        uid = message.from_user.id if message.from_user else 0
+        trades = await api.list_trades(uid)
     except ApiError as exc:
         await message.answer(f"❌ {exc.detail or exc}")
         return
@@ -199,7 +204,8 @@ async def cmd_today(message: Message, api: ApiClient) -> None:  # type: ignore[a
 
 async def cmd_week(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     try:
-        trades = await api.list_trades()
+        uid = message.from_user.id if message.from_user else 0
+        trades = await api.list_trades(uid)
     except ApiError as exc:
         await message.answer(f"❌ {exc.detail or exc}")
         return

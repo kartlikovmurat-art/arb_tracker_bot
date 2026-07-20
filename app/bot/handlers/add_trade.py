@@ -46,7 +46,8 @@ def _to_decimal(text: str) -> Optional[Decimal]:
 async def _send_trade(api: ApiClient, message: Message, data: dict[str, Any]) -> None:
     """Отправляет сделку в API и отвечает пользователю."""
     try:
-        await api.create_trade(TradePayload.from_raw(data))
+        user_id = message.from_user.id if message.from_user else 0
+        await api.create_trade(TradePayload.from_raw(data), user_id=user_id)
     except ApiError as exc:
         logger.warning("create_trade failed: %s", exc)
         await message.answer(f"❌ Не удалось сохранить: {exc.detail or exc}")
@@ -94,6 +95,7 @@ async def cmd_add_trade(message: Message, state: FSMContext) -> None:
         if not isinstance(data, dict):
             await message.answer("Ожидаю JSON-объект, не массив и не скаляр.")
             return
+        # API client и user_id прокидываем через workflow_data
         api: ApiClient = message.bot.get("api")  # type: ignore[arg-type]
         await _send_trade(api, message, data)
         return

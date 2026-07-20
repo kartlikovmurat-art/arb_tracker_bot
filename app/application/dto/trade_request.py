@@ -31,6 +31,10 @@ class TradeRequest(BaseModel):
     strategy: Optional[str] = None
     note: Optional[str] = None
 
+    # Telegram user id. Если не указан — берётся из X-Telegram-User-Id
+    # header в API, либо 0 (legacy).
+    telegram_user_id: int = 0
+
     def to_dto(self) -> CreateTradeDTO:
         return CreateTradeDTO(
             coin=self.coin,
@@ -48,4 +52,5 @@ class TradeRequest(BaseModel):
             status=self.status,
             strategy=self.strategy,
             note=self.note,
+            telegram_user_id=self.telegram_user_id,
         )

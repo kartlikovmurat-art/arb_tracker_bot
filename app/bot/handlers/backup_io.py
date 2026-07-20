@@ -28,7 +28,8 @@ def register(dp: Dispatcher, api: ApiClient) -> None:
 async def cmd_backup(message: Message, api: ApiClient) -> None:  # type: ignore[assignment]
     await message.answer("⏳ Готовлю бэкап…")
     try:
-        data = await api.backup_json()
+        uid = message.from_user.id if message.from_user else 0
+        data = await api.backup_json(uid)
     except ApiError as exc:
         await message.answer(f"❌ Не удалось: {exc.detail or exc}")
         return
@@ -88,7 +89,8 @@ async def handle_import_document(
         await message.answer(f"❌ Не удалось скачать файл: {exc}")
         return
     try:
-        result = await api.import_json(data)
+        uid = message.from_user.id if message.from_user else 0
+        result = await api.import_json(data, user_id=uid)
     except ApiError as exc:
         await message.answer(f"❌ Ошибка импорта: {exc.detail or exc}")
         return

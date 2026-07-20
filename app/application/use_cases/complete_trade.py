@@ -10,11 +10,11 @@ class CompleteTradeUseCase:
     def __init__(self, uow: UnitOfWork):
         self.uow = uow
 
-    async def execute(self, trade_id: int):
+    async def execute(self, trade_id: int, user_id: int = 0):
         async with self.uow:
-            trade = await self.uow.trades.get_by_id(trade_id)
+            trade = await self.uow.trades.get_by_id(trade_id, user_id=user_id)
             if trade is None:
                 return None
             trade.status = TradeStatus.COMPLETED
             trade = TradeCalculator.calculate(trade)
-            return await self.uow.trades.update(trade_id, trade)
+            return await self.uow.trades.update(trade_id, trade, user_id=user_id)

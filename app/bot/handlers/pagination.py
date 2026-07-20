@@ -36,7 +36,8 @@ async def _on_pager(
         return
     page = int(parts[2])
     try:
-        trades = await api.list_trades()
+        uid = callback.from_user.id if callback.from_user else 0
+        trades = await api.list_trades(uid)
     except ApiError as exc:
         await callback.answer(f"Ошибка: {exc.detail or exc}", show_alert=True)
         return

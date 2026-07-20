@@ -78,7 +78,8 @@ async def cmd_edit(
     if not rest:
         # Просто показать карточку с кнопками
         try:
-            trade = await api.get_trade(trade_id)
+            uid = message.from_user.id if message.from_user else 0
+            trade = await api.get_trade(trade_id, uid)
         except ApiError as exc:
             await message.answer(
                 "❌ Сделка не найдена."
@@ -100,7 +101,8 @@ async def cmd_edit(
         )
         return
     try:
-        trade = await api.patch_trade(trade_id, updates)
+        uid = message.from_user.id if message.from_user else 0
+        trade = await api.patch_trade(trade_id, updates, user_id=uid)
     except ApiError as exc:
         await message.answer(
             "❌ Сделка не найдена."
@@ -187,7 +189,8 @@ async def _on_complete_inline(
     assert callback.data is not None
     trade_id = int(callback.data.split(":")[2])
     try:
-        trade = await api.complete_trade(trade_id)
+        uid = callback.from_user.id if callback.from_user else 0
+        trade = await api.complete_trade(trade_id, uid)
     except ApiError as exc:
         await callback.answer(f"❌ {exc.detail or exc}", show_alert=True)
         return
@@ -210,7 +213,8 @@ async def cmd_delete(
     trade_id = int(args)
     # Без подтверждения удаляем, но в логах пишем
     try:
-        await api.delete_trade(trade_id)
+        uid = message.from_user.id if message.from_user else 0
+        await api.delete_trade(trade_id, uid)
     except ApiError as exc:
         await message.answer(
             "❌ Не найдена."
@@ -253,7 +257,8 @@ async def _on_delete_confirm(
         return
     if action == "yes":
         try:
-            await api.delete_trade(trade_id)
+            uid = callback.from_user.id if callback.from_user else 0
+            await api.delete_trade(trade_id, uid)
         except ApiError as exc:
             await callback.answer(f"❌ {exc.detail or exc}", show_alert=True)
             return
@@ -275,7 +280,8 @@ async def cmd_confirm(
         return
     trade_id = int(args)
     try:
-        trade = await api.complete_trade(trade_id)
+        uid = message.from_user.id if message.from_user else 0
+        trade = await api.complete_trade(trade_id, uid)
     except ApiError as exc:
         await message.answer(
             "❌ Не найдена."
