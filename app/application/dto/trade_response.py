@@ -28,8 +28,13 @@ class TradeResponse(BaseModel):
     withdrawal_fee: Decimal
     gas_fee: Decimal
     slippage: Decimal
+    buy_fee_percent: Decimal = Decimal("0")
+    sell_fee_percent: Decimal = Decimal("0")
+    network_fee: Decimal = Decimal("0")
     transfer_network: Optional[str] = None
     holding_time_seconds: Optional[int] = None
+    bought_at: Optional[datetime] = None
+    sold_at: Optional[datetime] = None
     profit: Decimal
     roi: Decimal
     trade_type: TradeType

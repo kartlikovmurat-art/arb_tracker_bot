@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, Mapping
 
@@ -38,7 +39,18 @@ class PatchTradeUseCase:
                         value = Decimal(str(value))
                     except Exception:  # noqa: BLE001
                         continue
+                elif isinstance(current, datetime) and not isinstance(value, datetime):
+                    # ISO-строка в datetime
+                    if isinstance(value, str):
+                        try:
+                            value = datetime.fromisoformat(
+                                value.replace("Z", "+00:00")
+                            )
+                        except ValueError:
+                            continue
                 setattr(trade, key, value)
 
+            # Пересчёт fees и времени, profit, ROI.
+            trade.recalculate()
             trade = TradeCalculator.calculate(trade)
             return await self.uow.trades.update(trade_id, trade, user_id=user_id)

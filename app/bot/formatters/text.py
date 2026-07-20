@@ -87,26 +87,34 @@ def format_trade(trade: Mapping[str, Any]) -> str:
     buy = _to_decimal(trade.get("buy_price"))
     sell = _to_decimal(trade.get("sell_price"))
     lines.append(f"Цена: {buy.normalize():f} → {sell.normalize():f}")
-    fees = _to_decimal(trade.get("buy_fee")) + _to_decimal(
-        trade.get("sell_fee")
-    ) + _to_decimal(trade.get("withdrawal_fee")) + _to_decimal(
-        trade.get("gas_fee")
-    ) + _to_decimal(trade.get("slippage"))
-    if fees > 0:
-        lines.append(f"💸 Комиссии: {fees.quantize(Decimal('0.01'))}")
-    # Детали комиссий — если хоть одна ненулевая
+    # Комиссии: проценты и money-значения.
+    buy_pct = _to_decimal(trade.get("buy_fee_percent"))
+    sell_pct = _to_decimal(trade.get("sell_fee_percent"))
+    network_fee = _to_decimal(trade.get("network_fee"))
+    buy_money = _to_decimal(trade.get("buy_fee"))
+    sell_money = _to_decimal(trade.get("sell_fee"))
+    slippage = _to_decimal(trade.get("slippage"))
+
     fee_parts = []
-    for label, key in [
-        ("покупка", "buy_fee"),
-        ("продажа", "sell_fee"),
-        ("вывод", "withdrawal_fee"),
-        ("газ", "gas_fee"),
-        ("проскальз.", "slippage"),
-    ]:
-        v = _to_decimal(trade.get(key))
-        if v > 0:
-            fee_parts.append(f"{label} {v.quantize(Decimal('0.01'))}")
-    if fee_parts and len(fee_parts) > 1:
+    if buy_pct > 0:
+        fee_parts.append(f"покупка {buy_pct.normalize():f}% ({buy_money.quantize(Decimal('0.01'))})")
+    elif buy_money > 0:
+        fee_parts.append(f"покупка {buy_money.quantize(Decimal('0.01'))}")
+    if sell_pct > 0:
+        fee_parts.append(f"продажа {sell_pct.normalize():f}% ({sell_money.quantize(Decimal('0.01'))})")
+    elif sell_money > 0:
+        fee_parts.append(f"продажа {sell_money.quantize(Decimal('0.01'))}")
+    if network_fee > 0:
+        fee_parts.append(f"сеть/вывод {network_fee.quantize(Decimal('0.01'))} USDT")
+    if slippage > 0:
+        fee_parts.append(f"проскальз. {slippage.quantize(Decimal('0.01'))}")
+    if fee_parts:
+        total = _to_decimal(trade.get("buy_fee")) + _to_decimal(
+            trade.get("sell_fee")
+        ) + _to_decimal(trade.get("withdrawal_fee")) + _to_decimal(
+            trade.get("slippage")
+        )
+        lines.append(f"💸 Комиссии: {total.quantize(Decimal('0.01'))}")
         lines.append(f"   └ {', '.join(fee_parts)}")
     # Сеть перевода
     network = trade.get("transfer_network")

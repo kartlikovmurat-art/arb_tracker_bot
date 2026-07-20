@@ -170,15 +170,12 @@
         <div class="field"><label>Цена продажи</label><input id="f_sell_price" type="number" step="any" placeholder="60500"></div>
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-        <div class="field"><label>Fee покупки</label><input id="f_buy_fee" type="number" step="any" value="0"></div>
-        <div class="field"><label>Fee продажи</label><input id="f_sell_fee" type="number" step="any" value="0"></div>
+        <div class="field"><label>💸 Buy fee %</label><input id="f_buy_fee_percent" type="number" step="0.001" value="0.1" placeholder="0.1"></div>
+        <div class="field"><label>💸 Sell fee %</label><input id="f_sell_fee_percent" type="number" step="0.001" value="0.15" placeholder="0.15"></div>
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-        <div class="field"><label>Withdrawal</label><input id="f_w_fee" type="number" step="any" value="0"></div>
-        <div class="field"><label>Gas</label><input id="f_gas" type="number" step="any" value="0"></div>
-      </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-        <div class="field"><label>🔗 Сеть перевода</label>
+        <div class="field"><label>🌐 Network fee (USDT)</label><input id="f_network_fee" type="number" step="any" value="0" placeholder="2.5"></div>
+        <div class="field"><label>🔗 Сеть</label>
           <select id="f_network">
             <option value="">— не указано —</option>
             <option value="ERC20">ERC20 (Ethereum)</option>
@@ -190,24 +187,13 @@
             <option value="Solana">Solana</option>
             <option value="TON">TON</option>
             <option value="BTC">BTC</option>
-            <option value="Internal">Internal (внутри биржи)</option>
+            <option value="Internal">Internal</option>
           </select>
         </div>
-        <div class="field"><label>⏱ Время удерж.</label>
-          <select id="f_holding">
-            <option value="">— не указано —</option>
-            <option value="60">1 минута</option>
-            <option value="300">5 минут</option>
-            <option value="900">15 минут</option>
-            <option value="1800">30 минут</option>
-            <option value="3600">1 час</option>
-            <option value="7200">2 часа</option>
-            <option value="21600">6 часов</option>
-            <option value="86400">1 день</option>
-            <option value="259200">3 дня</option>
-            <option value="604800">1 неделя</option>
-          </select>
-        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div class="field"><label>🕐 Купил</label><input id="f_bought_at" type="datetime-local"></div>
+        <div class="field"><label>🕐 Продал</label><input id="f_sold_at" type="datetime-local"></div>
       </div>
       <div class="field"><label>Стратегия</label><input id="f_strategy" placeholder="spread-hunter"></div>
       <div class="field"><label>Заметка</label><textarea id="f_note" rows="2" placeholder="(опционально)"></textarea></div>
@@ -273,12 +259,14 @@
     <div class="field"><label>Цена покупки</label><input id="e_buy_price" type="number" step="any"></div>
     <div class="field"><label>Цена продажи</label><input id="e_sell_price" type="number" step="any"></div>
     <div class="field"><label>Объём</label><input id="e_amount" type="number" step="any"></div>
-    <div class="field"><label>🔗 Сеть перевода</label>
+    <div class="field"><label>💸 Buy fee %</label><input id="e_buy_fee_percent" type="number" step="0.001"></div>
+    <div class="field"><label>💸 Sell fee %</label><input id="e_sell_fee_percent" type="number" step="0.001"></div>
+    <div class="field"><label>🌐 Network fee (USDT)</label><input id="e_network_fee" type="number" step="any"></div>
+    <div class="field"><label>🔗 Сеть</label>
       <input id="e_network" placeholder="ERC20, TRC20, ...">
     </div>
-    <div class="field"><label>⏱ Время удержания (сек)</label>
-      <input id="e_holding" type="number" min="0" placeholder="300 = 5 мин">
-    </div>
+    <div class="field"><label>🕐 Купил</label><input id="e_bought_at" type="datetime-local"></div>
+    <div class="field"><label>🕐 Продал</label><input id="e_sold_at" type="datetime-local"></div>
     <div class="field"><label>Заметка</label><textarea id="e_note" rows="2"></textarea></div>
     <div class="field"><label>Статус</label>
       <select id="e_status">
@@ -574,8 +562,12 @@ async function openEdit(id) {
     document.getElementById('e_buy_price').value = currentTrade.buy_price;
     document.getElementById('e_sell_price').value = currentTrade.sell_price;
     document.getElementById('e_amount').value = currentTrade.amount;
+    document.getElementById('e_buy_fee_percent').value = currentTrade.buy_fee_percent || 0;
+    document.getElementById('e_sell_fee_percent').value = currentTrade.sell_fee_percent || 0;
+    document.getElementById('e_network_fee').value = currentTrade.network_fee || 0;
     document.getElementById('e_network').value = currentTrade.transfer_network || '';
-    document.getElementById('e_holding').value = currentTrade.holding_time_seconds || '';
+    document.getElementById('e_bought_at').value = currentTrade.bought_at ? currentTrade.bought_at.slice(0, 16) : '';
+    document.getElementById('e_sold_at').value = currentTrade.sold_at ? currentTrade.sold_at.slice(0, 16) : '';
     document.getElementById('e_note').value = currentTrade.note || '';
     document.getElementById('e_status').value = currentTrade.status;
     document.getElementById('editModal').classList.add('show');
@@ -589,13 +581,18 @@ function closeEdit() {
 
 async function saveEdit() {
   if (!currentTrade) return;
-  const holding = document.getElementById('e_holding').value;
+  const boughtAt = document.getElementById('e_bought_at').value;
+  const soldAt = document.getElementById('e_sold_at').value;
   const updates = {
     buy_price: document.getElementById('e_buy_price').value,
     sell_price: document.getElementById('e_sell_price').value,
     amount: document.getElementById('e_amount').value,
+    buy_fee_percent: document.getElementById('e_buy_fee_percent').value || 0,
+    sell_fee_percent: document.getElementById('e_sell_fee_percent').value || 0,
+    network_fee: document.getElementById('e_network_fee').value || 0,
     transfer_network: document.getElementById('e_network').value || null,
-    holding_time_seconds: holding ? parseInt(holding) : null,
+    bought_at: boughtAt ? new Date(boughtAt).toISOString() : null,
+    sold_at: soldAt ? new Date(soldAt).toISOString() : null,
     note: document.getElementById('e_note').value,
     status: document.getElementById('e_status').value,
   };

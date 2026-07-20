@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -20,15 +21,23 @@ class CreateTradeDTO(BaseModel):
     buy_price: Decimal
     sell_price: Decimal
 
+    # Старые поля (deprecated) — оставлены для обратной совместимости.
+    # Если указаны buy_fee/sell_fee — используются как есть.
     buy_fee: Decimal = Decimal("0")
     sell_fee: Decimal = Decimal("0")
     withdrawal_fee: Decimal = Decimal("0")
     gas_fee: Decimal = Decimal("0")
     slippage: Decimal = Decimal("0")
 
-    # Сеть перевода (ERC20 / TRC20 / BEP20 / BTC / ...). Опционально.
+    # Новые входные поля.
+    buy_fee_percent: Decimal = Decimal("0")
+    sell_fee_percent: Decimal = Decimal("0")
+    network_fee: Decimal = Decimal("0")
     transfer_network: Optional[str] = None
-    # Время удержания в секундах. Опционально.
+    bought_at: Optional[datetime] = None
+    sold_at: Optional[datetime] = None
+
+    # Legacy: явное время удержания (если оба времени не заданы).
     holding_time_seconds: Optional[int] = None
 
     trade_type: TradeType = TradeType.CEX_CEX

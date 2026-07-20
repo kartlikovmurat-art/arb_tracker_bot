@@ -13,7 +13,7 @@ except Exception:
 ALICE = 111111
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def isolated_app():
     import os
     import tempfile
@@ -59,7 +59,8 @@ def test_create_trade_with_network_and_holding(isolated_app) -> None:
         "buy_price": "3000",
         "sell_price": "3010",
         "transfer_network": "ERC20",
-        "holding_time_seconds": 3600,
+        "bought_at": "2025-07-20T10:00:00+00:00",
+        "sold_at": "2025-07-20T11:00:00+00:00",
     }
     r = client.post(
         "/trades/",
@@ -69,6 +70,7 @@ def test_create_trade_with_network_and_holding(isolated_app) -> None:
     assert r.status_code == 200, r.text
     trade = r.json()
     assert trade["transfer_network"] == "ERC20"
+    # 1 час = 3600 секунд, вычислено из bought_at/sold_at
     assert trade["holding_time_seconds"] == 3600
 
 
@@ -113,10 +115,15 @@ def test_patch_network_and_holding(isolated_app) -> None:
     trade = r.json()
     r = client.patch(
         f"/trades/{trade['id']}",
-        json={"transfer_network": "Solana", "holding_time_seconds": 180},
+        json={
+            "transfer_network": "Solana",
+            "bought_at": "2025-07-20T10:00:00+00:00",
+            "sold_at": "2025-07-20T10:03:00+00:00",
+        },
         headers={"X-Telegram-User-Id": str(ALICE)},
     )
     assert r.status_code == 200, r.text
     updated = r.json()
     assert updated["transfer_network"] == "Solana"
+    # 3 минуты = 180 секунд
     assert updated["holding_time_seconds"] == 180

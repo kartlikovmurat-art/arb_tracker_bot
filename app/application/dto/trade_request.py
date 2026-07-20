@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -19,13 +20,20 @@ class TradeRequest(BaseModel):
     buy_price: Decimal
     sell_price: Decimal
 
+    # Старые поля (deprecated) — для обратной совместимости.
     buy_fee: Decimal = Decimal("0")
     sell_fee: Decimal = Decimal("0")
     withdrawal_fee: Decimal = Decimal("0")
     gas_fee: Decimal = Decimal("0")
     slippage: Decimal = Decimal("0")
 
+    # Новые входные поля.
+    buy_fee_percent: Decimal = Decimal("0")
+    sell_fee_percent: Decimal = Decimal("0")
+    network_fee: Decimal = Decimal("0")
     transfer_network: Optional[str] = None
+    bought_at: Optional[datetime] = None
+    sold_at: Optional[datetime] = None
     holding_time_seconds: Optional[int] = None
 
     trade_type: TradeType = TradeType.CEX_CEX
@@ -51,7 +59,12 @@ class TradeRequest(BaseModel):
             withdrawal_fee=self.withdrawal_fee,
             gas_fee=self.gas_fee,
             slippage=self.slippage,
+            buy_fee_percent=self.buy_fee_percent,
+            sell_fee_percent=self.sell_fee_percent,
+            network_fee=self.network_fee,
             transfer_network=self.transfer_network,
+            bought_at=self.bought_at,
+            sold_at=self.sold_at,
             holding_time_seconds=self.holding_time_seconds,
             trade_type=self.trade_type,
             status=self.status,

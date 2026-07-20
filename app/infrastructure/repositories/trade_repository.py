@@ -116,6 +116,11 @@ class TradeRepository:
         model.profit = trade.profit
         model.transfer_network = trade.transfer_network
         model.holding_time_seconds = trade.holding_time_seconds
+        model.buy_fee_percent = trade.buy_fee_percent
+        model.sell_fee_percent = trade.sell_fee_percent
+        model.network_fee = trade.network_fee
+        model.bought_at = trade.bought_at
+        model.sold_at = trade.sold_at
         model.roi = trade.roi
 
         await self.session.commit()

@@ -16,5 +16,7 @@ class CompleteTradeUseCase:
             if trade is None:
                 return None
             trade.status = TradeStatus.COMPLETED
+            # Если задано только время продажи (sold_at), оставляем как есть.
+            trade.recalculate()
             trade = TradeCalculator.calculate(trade)
             return await self.uow.trades.update(trade_id, trade, user_id=user_id)

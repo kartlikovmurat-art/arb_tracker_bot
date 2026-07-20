@@ -57,13 +57,12 @@ async def _on_network(callback: CallbackQuery, state: FSMContext) -> None:
 
     # Конкретная сеть выбрана
     await state.update_data(transfer_network=payload)
-    await state.set_state(TradeForm.holding_time)
+    await state.set_state(TradeForm.bought_at)
     if callback.message is not None:
         await callback.message.edit_text(  # type: ignore[union-attr]
             f"🔗  Сеть: <b>{payload}</b> ✓\n\n"
-            "⏱  Время от покупки до продажи (holding time):\n"
-            "Формат: <code>5m</code> = 5 мин, <code>2h</code> = 2 ч, "
-            "<code>1d3h</code> = 1 день 3 ч, или просто число секунд.\n"
-            "'-' если ещё не закрыл сделку (PENDING)."
+            "🕐  <b>Время покупки (bought_at)</b>\n"
+            "Формат: <code>2025-07-21 14:30</code> или <code>2025-07-21T14:30</code>.\n"
+            "'-' если ещё не купил (PENDING)."
         )
     await callback.answer(f"Сеть: {payload}")
