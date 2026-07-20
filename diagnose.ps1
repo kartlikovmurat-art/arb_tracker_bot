@@ -1,88 +1,78 @@
-# Arbitrage Tracker — diagnose script (Windows / PowerShell)
-# Собирает всю диагностику, чтобы сразу было видно, что не так.
-# Запускать:  powershell -ExecutionPolicy Bypass -File .\diagnose.ps1
-# Результат: один большой отчёт — копируй и кидай мне в чат.
+﻿# Arbitrage Tracker - diagnostic script (Windows / PowerShell)
+# Collects everything we need to debug a broken install in one shot.
+# Run:   powershell -ExecutionPolicy Bypass -File .\diagnose.ps1
+# Result: a big report - copy it and send it back to the assistant.
 
 $ErrorActionPreference = "Continue"
-$report = New-Object System.Text.StringBuilder
 
-function Out-Line($color, [string]$text) {
-    Write-Host $text -ForegroundColor $color
-    [void]$report.AppendLine($text)
-}
+function Section([string]$title) { Write-Host "`n=== $title ===" -ForegroundColor Cyan }
 
-Out-Line Cyan "═══════════════════════════════════════════════════════════════"
-Out-Line Cyan  " Arbitrage Tracker — диагностика"
-Out-Line Cyan  " $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-Out-Line Cyan "═══════════════════════════════════════════════════════════════"
-
-# ── 1. Python ────────────────────────────────────────────────────────
-Out-Line Yellow "`n[1] Python"
+# ── 1. Python ────────────────────────────────────────────────────
+Section "1. Python"
 $pyVer = python --version 2>&1
-Out-Line White "  $pyVer"
+Write-Host "  $pyVer"
 
-# ── 2. Установленные пакеты ─────────────────────────────────────────
-Out-Line Yellow "`n[2] Версии пакетов (pip show)"
+# ── 2. Package versions ─────────────────────────────────────────
+Section "2. Package versions (pip show)"
 foreach ($pkg in @("aiogram","httpx","fastapi","sqlalchemy","aiosqlite","alembic","pytest","respx")) {
     $info = pip show $pkg 2>&1 | Select-String -Pattern "^Version:" | Select-Object -First 1
     if ($info) {
-        Out-Line White "  $pkg : $($info -replace '^Version:\s*','')"
+        Write-Host "  $pkg : $($info -replace '^Version:\s*','')" -ForegroundColor White
     } else {
-        Out-Line Red    "  $pkg : ❌ НЕ УСТАНОВЛЕН"
+        Write-Host "  $pkg : NOT INSTALLED" -ForegroundColor Red
     }
 }
 
-# ── 3. .env ──────────────────────────────────────────────────────────
-Out-Line Yellow "`n[3] Файл .env"
+# ── 3. .env ──────────────────────────────────────────────────────
+Section "3. .env file"
 if (Test-Path .env) {
-    Out-Line Green "  ✓ существует"
+    Write-Host "  exists" -ForegroundColor Green
     $envContent = Get-Content .env
     foreach ($line in $envContent) {
         if ($line -match "BOT_TOKEN=" -and $line -notmatch "your_bot_token_here") {
-            Out-Line White  "  $line" -ErrorAction SilentlyContinue
+            Write-Host "  $line" -ForegroundColor White
             $token = ($line -split "=",2)[1].Trim()
-            Out-Line White  "  (токен виден, длина = $($token.Length) символов)"
+            Write-Host "  (token length = $($token.Length) chars)" -ForegroundColor DarkGray
         } elseif ($line -match "BOT_TOKEN=") {
-            Out-Line Red    "  ⚠️  BOT_TOKEN не заполнен (your_bot_token_here)"
+            Write-Host "  WARNING: BOT_TOKEN is the placeholder" -ForegroundColor Red
         } else {
-            Out-Line DarkGray "  $line"
+            Write-Host "  $line" -ForegroundColor DarkGray
         }
     }
 } else {
-    Out-Line Red    "  ❌ Файл .env не найден в текущей директории"
-    Out-Line Yellow "  💡 Создай: Copy-Item .env.example .env   и заполни BOT_TOKEN"
+    Write-Host "  NOT FOUND. Create it: Copy-Item .env.example .env" -ForegroundColor Red
 }
 
-# ── 4. Git ───────────────────────────────────────────────────────────
-Out-Line Yellow "`n[4] Git"
+# ── 4. Git ──────────────────────────────────────────────────────
+Section "4. Git"
 try {
     $branch = git rev-parse --abbrev-ref HEAD 2>&1
-    Out-Line White "  Ветка: $branch"
+    Write-Host "  Branch: $branch"
     $log = git log --oneline -5 2>&1
-    Out-Line White  "  Последние коммиты:"
-    foreach ($l in $log) { Out-Line DarkGray "    $l" }
+    Write-Host "  Last 5 commits:"
+    foreach ($l in $log) { Write-Host "    $l" -ForegroundColor DarkGray }
     $status = git status --short 2>&1
     if ($status) {
-        Out-Line Yellow "  Незакоммиченные изменения:"
-        foreach ($s in $status) { Out-Line DarkGray "    $s" }
+        Write-Host "  Uncommitted changes:" -ForegroundColor Yellow
+        foreach ($s in $status) { Write-Host "    $s" -ForegroundColor DarkGray }
     } else {
-        Out-Line Green "  ✓ Рабочее дерево чистое"
+        Write-Host "  Working tree clean" -ForegroundColor Green
     }
 } catch {
-    Out-Line Red    "  ❌ Не git-репозиторий или git недоступен"
+    Write-Host "  ERROR: not a git repo or git not available" -ForegroundColor Red
 }
 
-# ── 5. main.py / таблицы ────────────────────────────────────────────
-Out-Line Yellow "`n[5] База данных"
+# ── 5. Database ─────────────────────────────────────────────────
+Section "5. Database (db.sqlite3)"
 if (Test-Path db.sqlite3) {
     $size = (Get-Item db.sqlite3).Length
-    Out-Line Green "  ✓ db.sqlite3 ($([math]::Round($size/1024,1)) KB)"
+    Write-Host "  exists ($([math]::Round($size/1024,1)) KB)" -ForegroundColor Green
 } else {
-    Out-Line Yellow "  ℹ db.sqlite3 не существует — создастся при python main.py"
+    Write-Host "  does not exist yet. Will be created by 'python main.py'" -ForegroundColor Yellow
 }
 
-# ── 6. Токен живой? ─────────────────────────────────────────────────
-Out-Line Yellow "`n[6] Проверка токена через Bot API"
+# ── 6. Token via Bot API ────────────────────────────────────────
+Section "6. Token check (getMe)"
 if (Test-Path .env) {
     $tokenLine = Select-String -Path .env -Pattern "^BOT_TOKEN=" | Select-Object -First 1
     if ($tokenLine) {
@@ -91,95 +81,65 @@ if (Test-Path .env) {
             try {
                 $resp = Invoke-RestMethod "https://api.telegram.org/bot${token}/getMe" -TimeoutSec 10
                 if ($resp.ok) {
-                    Out-Line Green "  ✓ Бот живой: @${($resp.result.username)} (id=$($resp.result.id))"
-                    Out-Line Green "  Имя: $($resp.result.first_name)"
+                    Write-Host "  ok: bot @${($resp.result.username)} (id=$($resp.result.id))" -ForegroundColor Green
                 } else {
-                    Out-Line Red    "  ❌ Telegram вернул ошибку: $($resp.description)"
+                    Write-Host "  ERROR: Telegram says: $($resp.description)" -ForegroundColor Red
                 }
             } catch {
-                Out-Line Red    "  ❌ Не удалось достучаться до api.telegram.org"
-                Out-Line Red    "  $($_.Exception.Message)"
+                Write-Host "  ERROR: cannot reach api.telegram.org" -ForegroundColor Red
+                Write-Host "  $($_.Exception.Message)" -ForegroundColor Red
             }
         } else {
-            Out-Line Red    "  ❌ BOT_TOKEN пустой"
+            Write-Host "  ERROR: BOT_TOKEN is empty" -ForegroundColor Red
         }
     }
 }
 
-# ── 7. Файлы бота в репо ────────────────────────────────────────────
-Out-Line Yellow "`n[7] Структура app/bot/ в локальном клоне"
+# ── 7. bot.py structure ─────────────────────────────────────────
+Section "7. app/bot/bot.py in local clone"
 if (Test-Path app/bot/bot.py) {
     $hasPrepare = Select-String -Path app/bot/bot.py -Pattern "prepare_value" -Quiet
-    $hasBuild   = Select-String -Path app/bot/bot.py -Pattern "build_form_data" -Quiet
+    $hasBuild   = Select-String -Path app/bot/bot.py -Pattern "self.build_form_data" -Quiet
     if ($hasPrepare) {
-        Out-Line Green "  ✓ HttpxSession использует prepare_value (новый код, PR #3)"
+        Write-Host "  ok: HttpxSession uses prepare_value (PR #3 fix is here)" -ForegroundColor Green
     } elseif ($hasBuild) {
-        Out-Line Red    "  ❌ HttpxSession ещё использует build_form_data — старый код!"
-        Out-Line Yellow "     Нужно: git pull origin main"
+        Write-Host "  ERROR: still uses build_form_data - old code, need git pull" -ForegroundColor Red
     } else {
-        Out-Line Yellow "  ⚠ Не нашёл ни prepare_value, ни build_form_data"
-    }
-    $files = Get-ChildItem app/bot -Recurse -File -Filter "*.py" | Select-Object -ExpandProperty FullName
-    Out-Line White  "  Файлов в app/bot: $($files.Count)"
-    foreach ($f in $files) {
-        $rel = $f -replace [regex]::Escape((Get-Location).Path + "\"), ''
-        Out-Line DarkGray "    $rel"
+        Write-Host "  WARNING: neither prepare_value nor build_form_data found" -ForegroundColor Yellow
     }
 } else {
-    Out-Line Red "  ❌ app/bot/bot.py не найден — ты не в корне проекта?"
-    Out-Line White "  Текущая директория: $(Get-Location)"
+    Write-Host "  ERROR: app/bot/bot.py not found. Wrong directory?" -ForegroundColor Red
+    Write-Host "  Current: $(Get-Location)" -ForegroundColor Yellow
 }
 
-# ── 8. Проверка конфликтующих процессов ─────────────────────────────
-Out-Line Yellow "`n[8] Запущенные процессы"
-$botProcs = Get-Process python -ErrorAction SilentlyContinue | Where-Object {
-    $_.CommandLine -like "*app/bot/bot.py*"
-}
-$apiProcs = Get-Process python -ErrorAction SilentlyContinue | Where-Object {
-    $_.CommandLine -like "*uvicorn*"
-}
+# ── 8. Running processes ────────────────────────────────────────
+Section "8. Running processes"
+$botProcs = Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*app/bot/bot.py*" }
+$apiProcs = Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*uvicorn*" }
 if ($botProcs) {
-    foreach ($p in $botProcs) {
-        Out-Line White "  Бот: PID=$($p.Id), started=$($p.StartTime)"
-    }
-} else {
-    Out-Line DarkGray "  Бот: не запущен"
-}
+    foreach ($p in $botProcs) { Write-Host "  Bot:  PID=$($p.Id), started=$($p.StartTime)" }
+} else { Write-Host "  Bot:  not running" -ForegroundColor DarkGray }
 if ($apiProcs) {
-    foreach ($p in $apiProcs) {
-        Out-Line White "  API: PID=$($p.Id), started=$($p.StartTime)"
-    }
-} else {
-    Out-Line DarkGray "  API: не запущен"
-}
+    foreach ($p in $apiProcs) { Write-Host "  API:  PID=$($p.Id), started=$($p.StartTime)" }
+} else { Write-Host "  API:  not running" -ForegroundColor DarkGray }
 
-# ── 9. API живой? ──────────────────────────────────────────────────
-Out-Line Yellow "`n[9] API на :8000"
+# ── 9. API on :8000 ───────────────────────────────────────────
+Section "9. API on :8000"
 try {
     $r = Invoke-WebRequest "http://127.0.0.1:8000/trades/" -TimeoutSec 3 -UseBasicParsing
-    Out-Line Green "  ✓ /trades/ → $($r.StatusCode)"
+    Write-Host "  ok: /trades/ -> $($r.StatusCode)" -ForegroundColor Green
 } catch {
     if ($_.Exception.Message -match "connection|refused|10061") {
-        Out-Line Red    "  ✗ API не слушает :8000"
-        Out-Line Yellow "    Запусти сначала: python -m uvicorn app.main:app --port 8000"
+        Write-Host "  ERROR: API is not listening on :8000" -ForegroundColor Red
     } else {
-        Out-Line Red    "  ✗ Ошибка: $($_.Exception.Message)"
+        Write-Host "  ERROR: $($_.Exception.Message)" -ForegroundColor Red
     }
 }
 
-# ── 10. Лог бота если есть ─────────────────────────────────────────
-Out-Line Yellow "`n[10] Лог бота (bot.log, последние 30 строк)"
+# ── 10. bot.log tail ──────────────────────────────────────────
+Section "10. bot.log (last 30 lines)"
 if (Test-Path bot.log) {
-    Get-Content bot.log -Tail 30 | ForEach-Object { Out-Line DarkGray "  $_" }
-} else {
-    Out-Line DarkGray "  (нет файла bot.log)"
-}
+    Get-Content bot.log -Tail 30 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+} else { Write-Host "  (no bot.log)" -ForegroundColor DarkGray }
 
-# ── Итог ───────────────────────────────────────────────────────────
-Out-Line Cyan "`n═══════════════════════════════════════════════════════════════"
-Out-Line Cyan " Скопируй вывод всего этого отчёта и кинь мне сюда."
-Out-Line Cyan "═══════════════════════════════════════════════════════════════"
-
-# Сохраним в файл
-$report | Out-File -FilePath diagnose-report.txt -Encoding UTF8
-Out-Line Yellow "`n💾 Отчёт сохранён в diagnose-report.txt"
+Write-Host "`n=== Copy the entire output above and send it to the assistant ===" -ForegroundColor Cyan

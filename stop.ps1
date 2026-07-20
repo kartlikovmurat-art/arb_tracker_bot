@@ -1,14 +1,20 @@
-# Arbitrage Tracker — stop script (Windows / PowerShell)
-# Останавливает API и Telegram-бота.
+﻿# Arbitrage Tracker - stop script (Windows / PowerShell)
+# Kills any uvicorn or app/bot/bot.py process.
 
-Write-Host "🛑 Останавливаю процессы..." -ForegroundColor Yellow
+Write-Host "Stopping running processes..." -ForegroundColor Yellow
 
-Get-Process python -ErrorAction SilentlyContinue | Where-Object {
+$procs = Get-Process python -ErrorAction SilentlyContinue | Where-Object {
     $_.CommandLine -like "*uvicorn app.main*" -or
     $_.CommandLine -like "*app/bot/bot.py*"
-} | ForEach-Object {
-    Write-Host "  Убиваю PID=$($_.Id): $($_.CommandLine.Substring(0, [Math]::Min(60, $_.CommandLine.Length)))" -ForegroundColor DarkYellow
-    Stop-Process -Id $_.Id -Force
 }
 
-Write-Host "✅ Готово." -ForegroundColor Green
+if ($procs) {
+    foreach ($p in $procs) {
+        Write-Host "  Killing PID=$($p.Id)" -ForegroundColor DarkYellow
+        Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+    }
+} else {
+    Write-Host "  Nothing to stop." -ForegroundColor DarkGray
+}
+
+Write-Host "Done." -ForegroundColor Green

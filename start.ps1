@@ -1,77 +1,80 @@
-# Arbitrage Tracker — start script (Windows / PowerShell)
-# Запускает API и Telegram-бота в двух отдельных окнах.
-# Запускать из корня проекта:  powershell -ExecutionPolicy Bypass -File .\start.ps1
+﻿# Arbitrage Tracker - start script (Windows / PowerShell)
+# Runs the API and the Telegram bot in two SEPARATE visible windows.
+# Run:   powershell -ExecutionPolicy Bypass -File .\start.ps1
+# Stop:  close both windows, or run  .\stop.ps1
 
 $ErrorActionPreference = "Stop"
 
-# ── 1. Проверки ─────────────────────────────────────────────────────
+# ── Validation ────────────────────────────────────────────────────
 if (-not (Test-Path .env)) {
-    Write-Host "❌ Нет файла .env. Создаю из .env.example..." -ForegroundColor Yellow
-    Copy-Item .env.example .env
-    Write-Host "⚠️  Открой .env и впиши BOT_TOKEN (от @BotFather)" -ForegroundColor Red
+    Write-Host "No .env found. Creating from .env.example..." -ForegroundColor Yellow
+    if (Test-Path .env.example) {
+        Copy-Item .env.example .env
+    } else {
+        Write-Host "ERROR: .env.example is also missing" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "Open .env and set BOT_TOKEN, then run this script again." -ForegroundColor Red
     notepad .env
     exit 1
 }
 
 $envContent = Get-Content .env -Raw
 if ($envContent -notmatch "BOT_TOKEN=\S+") {
-    Write-Host "❌ В .env не заполнен BOT_TOKEN" -ForegroundColor Red
+    Write-Host "ERROR: BOT_TOKEN is empty in .env" -ForegroundColor Red
     exit 1
 }
 
-# ── 2. Создание таблиц (один раз) ─────────────────────────────────
-Write-Host "`n📦 Создаю таблицы..." -ForegroundColor Cyan
+# ── Create tables (idempotent) ─────────────────────────────────
+Write-Host "`nCreating tables..." -ForegroundColor Cyan
 python main.py
 
-# ── 3. Запуск API в новом окне ────────────────────────────────────
-Write-Host "`n🌐 Запускаю FastAPI (http://127.0.0.1:8000)..." -ForegroundColor Cyan
+# ── Start API in a new window ───────────────────────────────────
+Write-Host "`nStarting FastAPI on http://127.0.0.1:8000 (new window)..." -ForegroundColor Cyan
 $apiCmd = "python -m uvicorn app.main:app --reload --port 8000"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $apiCmd -WindowStyle Normal
 Start-Sleep -Seconds 4
 
-# Проверяем что API живой
+# Health check
 try {
     $health = Invoke-RestMethod "http://127.0.0.1:8000/trades/" -TimeoutSec 5
-    Write-Host "✅ API отвечает: $($health.Count) сделок в базе" -ForegroundColor Green
+    Write-Host "  ok: API responds, $($health.Count) trades in DB" -ForegroundColor Green
 } catch {
-    Write-Host "❌ API не отвечает. Проверь окно с uvicorn." -ForegroundColor Red
+    Write-Host "ERROR: API is not responding. Check the first window." -ForegroundColor Red
     exit 1
 }
 
-# ── 4. Запуск бота в новом окне ───────────────────────────────────
-Write-Host "`n🤖 Запускаю Telegram-бота..." -ForegroundColor Cyan
+# ── Start bot in a new window ───────────────────────────────────
+Write-Host "`nStarting Telegram bot (new window)..." -ForegroundColor Cyan
 $botCmd = "python app/bot/bot.py"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $botCmd -WindowStyle Normal
 Start-Sleep -Seconds 4
 
-# ── 5. Финальная проверка ────────────────────────────────────────
-Write-Host "`n🔎 Проверяю токен у @BotFather..." -ForegroundColor Cyan
+# ── Final token check ──────────────────────────────────────────
+Write-Host "`nChecking token via @BotFather getMe..." -ForegroundColor Cyan
 $tokenLine = Select-String -Path .env -Pattern "^BOT_TOKEN="
 $token = ($tokenLine -split "=", 2)[1].Trim()
 try {
     $botInfo = Invoke-RestMethod "https://api.telegram.org/bot${token}/getMe" -TimeoutSec 5
     if ($botInfo.ok) {
-        Write-Host "✅ Бот живой: @${($botInfo.result.username)}" -ForegroundColor Green
+        Write-Host "  ok: bot @${($botInfo.result.username)} is alive" -ForegroundColor Green
     } else {
-        Write-Host "❌ Токен невалидный" -ForegroundColor Red
+        Write-Host "ERROR: token is invalid" -ForegroundColor Red
         exit 1
     }
 } catch {
-    Write-Host "❌ Не удалось достучаться до api.telegram.org" -ForegroundColor Red
+    Write-Host "ERROR: cannot reach api.telegram.org" -ForegroundColor Red
     exit 1
 }
 
 Write-Host @"
 
-╔════════════════════════════════════════════════════════════╗
-║  ✅ Всё готово!                                            ║
-║                                                            ║
-║  • API работает в отдельном окне (http://127.0.0.1:8000)   ║
-║  • Бот работает в отдельном окне (long-polling)            ║
-║                                                            ║
-║  👉 Открой Telegram → найди @${($botInfo.result.username)}     ║
-║     → /start                                               ║
-║                                                            ║
-║  Чтобы остановить — закрой оба окна PowerShell.            ║
-╚════════════════════════════════════════════════════════════╝
+================================================
+  ALL GOOD.
+  - API runs in a separate PowerShell window.
+  - Bot runs in another PowerShell window.
+  - Open Telegram -> @${($botInfo.result.username)} -> /start
+  - To stop everything, close both windows
+    or run:  powershell -ExecutionPolicy Bypass -File .\stop.ps1
+================================================
 "@ -ForegroundColor Green
