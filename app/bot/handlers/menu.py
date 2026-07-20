@@ -14,7 +14,7 @@ from typing import Any, Awaitable, Callable
 
 from aiogram import Dispatcher
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery
+from aiogram.types import BufferedInputFile, CallbackQuery
 
 from app.bot.api import ApiClient, ApiError
 from app.bot.formatters import (
@@ -387,8 +387,7 @@ async def reply_menu_router(
                 )
                 return
             filename = f"trades_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            document = io.BytesIO(data)
-            document.name = filename
+            document = BufferedInputFile(data, filename=filename)
             await message.answer_document(
                 document=document,
                 caption=(

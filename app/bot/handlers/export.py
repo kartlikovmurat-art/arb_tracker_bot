@@ -1,13 +1,22 @@
-"""Команда /export — выгрузка сделок в Excel через Telegram-документ."""
+"""Команда /export — выгрузка сделок в Excel через Telegram-документ.
+
+В aiogram 3.x параметр ``document`` метода ``answer_document``
+принимает либо ``str`` (file_id / URL / file path), либо
+``InputFile``. Прямой ``io.BytesIO`` отвергается валидатором pydantic
+с ``ValidationError: Input should be a valid string / InputFile``.
+
+Здесь оборачиваем байты в ``BufferedInputFile`` — он хранит данные
+в памяти и под капотом делает то же, что делал бы ``io.BytesIO``,
+но проходит типизацию.
+"""
 from __future__ import annotations
 
-import io
 import logging
 from datetime import datetime
 
 from aiogram import Dispatcher
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import BufferedInputFile, Message
 
 from app.bot.api import ApiClient, ApiError
 
@@ -35,9 +44,14 @@ async def cmd_export(message: Message, api: ApiClient) -> None:  # type: ignore[
         await message.answer("ℹ️ Выгрузка пуста — сделок пока нет.")
         return
     filename = f"trades_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
-    document = io.BytesIO(data)
-    document.name = filename
+    # BufferedInputFile принимает (data: bytes, filename: str).
+    # Под капотом aiogram считает это multipart-upload.
+    document = BufferedInputFile(data, filename=filename)
     await message.answer_document(
         document=document,
-        caption=f"📤 Экспорт сделок · {len(data)} байт",
+        caption=(
+            f"📤  <b>Экспорт готов!</b>\n"
+            f"📎  {filename}\n"
+            f"📦  {len(data)} байт"
+        ),
     )
