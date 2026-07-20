@@ -177,6 +177,38 @@
         <div class="field"><label>Withdrawal</label><input id="f_w_fee" type="number" step="any" value="0"></div>
         <div class="field"><label>Gas</label><input id="f_gas" type="number" step="any" value="0"></div>
       </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div class="field"><label>🔗 Сеть перевода</label>
+          <select id="f_network">
+            <option value="">— не указано —</option>
+            <option value="ERC20">ERC20 (Ethereum)</option>
+            <option value="TRC20">TRC20 (Tron)</option>
+            <option value="BEP20">BEP20 (BSC)</option>
+            <option value="Arbitrum">Arbitrum</option>
+            <option value="Optimism">Optimism</option>
+            <option value="Polygon">Polygon</option>
+            <option value="Solana">Solana</option>
+            <option value="TON">TON</option>
+            <option value="BTC">BTC</option>
+            <option value="Internal">Internal (внутри биржи)</option>
+          </select>
+        </div>
+        <div class="field"><label>⏱ Время удерж.</label>
+          <select id="f_holding">
+            <option value="">— не указано —</option>
+            <option value="60">1 минута</option>
+            <option value="300">5 минут</option>
+            <option value="900">15 минут</option>
+            <option value="1800">30 минут</option>
+            <option value="3600">1 час</option>
+            <option value="7200">2 часа</option>
+            <option value="21600">6 часов</option>
+            <option value="86400">1 день</option>
+            <option value="259200">3 дня</option>
+            <option value="604800">1 неделя</option>
+          </select>
+        </div>
+      </div>
       <div class="field"><label>Стратегия</label><input id="f_strategy" placeholder="spread-hunter"></div>
       <div class="field"><label>Заметка</label><textarea id="f_note" rows="2" placeholder="(опционально)"></textarea></div>
       <button class="btn" onclick="submitTrade()">💾 Сохранить сделку</button>
@@ -241,6 +273,12 @@
     <div class="field"><label>Цена покупки</label><input id="e_buy_price" type="number" step="any"></div>
     <div class="field"><label>Цена продажи</label><input id="e_sell_price" type="number" step="any"></div>
     <div class="field"><label>Объём</label><input id="e_amount" type="number" step="any"></div>
+    <div class="field"><label>🔗 Сеть перевода</label>
+      <input id="e_network" placeholder="ERC20, TRC20, ...">
+    </div>
+    <div class="field"><label>⏱ Время удержания (сек)</label>
+      <input id="e_holding" type="number" min="0" placeholder="300 = 5 мин">
+    </div>
     <div class="field"><label>Заметка</label><textarea id="e_note" rows="2"></textarea></div>
     <div class="field"><label>Статус</label>
       <select id="e_status">
@@ -324,6 +362,15 @@ function tradeCard(t) {
   const profit = parseFloat(t.profit || 0);
   const cls = profit > 0 ? 'pos' : (profit < 0 ? 'neg' : '');
   const emoji = profit > 0 ? '🟢' : (profit < 0 ? '🔴' : '⚪');
+  // Сеть и время — если указаны
+  const extras = [];
+  if (t.transfer_network) extras.push(`🔗 ${t.transfer_network}`);
+  if (t.holding_time_seconds && parseInt(t.holding_time_seconds) > 0) {
+    extras.push('⏱ ' + fmtHolding(parseInt(t.holding_time_seconds)));
+  }
+  const extrasHtml = extras.length > 0
+    ? `<div class="meta" style="margin-top: 4px;">${extras.join(' · ')}</div>`
+    : '';
   return `
     <div class="card" onclick="openEdit(${t.id})" style="cursor: pointer;">
       <div class="card-row">
@@ -337,9 +384,21 @@ function tradeCard(t) {
         <div class="meta">${t.buy_exchange} → ${t.sell_exchange}</div>
         <div class="meta">${t.amount} · ROI ${fmtPct(t.roi)}</div>
       </div>
+      ${extrasHtml}
       <div class="meta" style="margin-top: 4px;">📅 ${fmtDate(t.created_at)}</div>
     </div>
   `;
+}
+
+function fmtHolding(secs) {
+  if (!secs || secs <= 0) return '—';
+  const d = Math.floor(secs / 86400);
+  const h = Math.floor((secs % 86400) / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (d > 0) return `${d}д ${h}ч`;
+  if (h > 0) return `${h}ч ${m}м`;
+  if (m > 0) return `${m}м`;
+  return `${secs}с`;
 }
 
 async function loadTrades() {
@@ -452,6 +511,7 @@ function getVal(id) {
 }
 
 async function submitTrade() {
+  const holding = document.getElementById('f_holding').value;
   const data = {
     coin: getVal('f_coin')?.toUpperCase(),
     buy_exchange: getVal('f_buy_ex'),
@@ -463,6 +523,8 @@ async function submitTrade() {
     sell_fee: getVal('f_sell_fee') || '0',
     withdrawal_fee: getVal('f_w_fee') || '0',
     gas_fee: getVal('f_gas') || '0',
+    transfer_network: document.getElementById('f_network').value || null,
+    holding_time_seconds: holding ? parseInt(holding) : null,
     trade_type: getVal('f_type') || 'CEX_CEX',
     status: 'PENDING',
     strategy: getVal('f_strategy') || null,
@@ -477,6 +539,8 @@ async function submitTrade() {
     toast('✅ Сделка сохранена!');
     ['f_coin','f_buy_ex','f_sell_ex','f_amount','f_buy_price','f_sell_price','f_buy_fee','f_sell_fee','f_w_fee','f_gas','f_strategy','f_note']
       .forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f_network').value = '';
+    document.getElementById('f_holding').value = '';
     setTimeout(() => switchTab('trades'), 600);
   } catch (e) { /* toast shown */ }
 }
@@ -510,6 +574,8 @@ async function openEdit(id) {
     document.getElementById('e_buy_price').value = currentTrade.buy_price;
     document.getElementById('e_sell_price').value = currentTrade.sell_price;
     document.getElementById('e_amount').value = currentTrade.amount;
+    document.getElementById('e_network').value = currentTrade.transfer_network || '';
+    document.getElementById('e_holding').value = currentTrade.holding_time_seconds || '';
     document.getElementById('e_note').value = currentTrade.note || '';
     document.getElementById('e_status').value = currentTrade.status;
     document.getElementById('editModal').classList.add('show');
@@ -523,10 +589,13 @@ function closeEdit() {
 
 async function saveEdit() {
   if (!currentTrade) return;
+  const holding = document.getElementById('e_holding').value;
   const updates = {
     buy_price: document.getElementById('e_buy_price').value,
     sell_price: document.getElementById('e_sell_price').value,
     amount: document.getElementById('e_amount').value,
+    transfer_network: document.getElementById('e_network').value || null,
+    holding_time_seconds: holding ? parseInt(holding) : null,
     note: document.getElementById('e_note').value,
     status: document.getElementById('e_status').value,
   };

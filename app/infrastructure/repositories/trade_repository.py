@@ -114,6 +114,8 @@ class TradeRepository:
         model.strategy = trade.strategy
         model.note = trade.note
         model.profit = trade.profit
+        model.transfer_network = trade.transfer_network
+        model.holding_time_seconds = trade.holding_time_seconds
         model.roi = trade.roi
 
         await self.session.commit()

@@ -25,6 +25,9 @@ class TradeRequest(BaseModel):
     gas_fee: Decimal = Decimal("0")
     slippage: Decimal = Decimal("0")
 
+    transfer_network: Optional[str] = None
+    holding_time_seconds: Optional[int] = None
+
     trade_type: TradeType = TradeType.CEX_CEX
     status: TradeStatus = TradeStatus.PENDING
 
@@ -48,6 +51,8 @@ class TradeRequest(BaseModel):
             withdrawal_fee=self.withdrawal_fee,
             gas_fee=self.gas_fee,
             slippage=self.slippage,
+            transfer_network=self.transfer_network,
+            holding_time_seconds=self.holding_time_seconds,
             trade_type=self.trade_type,
             status=self.status,
             strategy=self.strategy,

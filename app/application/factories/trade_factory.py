@@ -20,6 +20,8 @@ class TradeFactory:
             withdrawal_fee=dto.withdrawal_fee,
             gas_fee=dto.gas_fee,
             slippage=dto.slippage,
+            transfer_network=dto.transfer_network,
+            holding_time_seconds=dto.holding_time_seconds,
             trade_type=dto.trade_type,
             status=dto.status,
             strategy=dto.strategy,

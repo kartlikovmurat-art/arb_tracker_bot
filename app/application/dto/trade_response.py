@@ -28,6 +28,8 @@ class TradeResponse(BaseModel):
     withdrawal_fee: Decimal
     gas_fee: Decimal
     slippage: Decimal
+    transfer_network: Optional[str] = None
+    holding_time_seconds: Optional[int] = None
     profit: Decimal
     roi: Decimal
     trade_type: TradeType

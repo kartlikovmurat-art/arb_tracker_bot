@@ -28,6 +28,8 @@ class TradeMapper:
             note=trade.note,
             created_at=trade.created_at,
             telegram_user_id=trade.telegram_user_id,
+            transfer_network=trade.transfer_network,
+            holding_time_seconds=trade.holding_time_seconds,
         )
 
     @staticmethod
@@ -53,4 +55,6 @@ class TradeMapper:
             id=model.id,
             created_at=model.created_at,
             telegram_user_id=model.telegram_user_id or 0,
+            transfer_network=model.transfer_network,
+            holding_time_seconds=model.holding_time_seconds,
         )

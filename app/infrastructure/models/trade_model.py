@@ -36,6 +36,11 @@ class TradeModel(Base):
     gas_fee: Mapped[Decimal] = mapped_column(Numeric(28, 12), default=0)
     slippage: Mapped[Decimal] = mapped_column(Numeric(28, 12), default=0)
 
+    # Сеть перевода (ERC20, TRC20, BEP20, BTC, Arbitrum, TON, ...).
+    transfer_network: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Сколько секунд между покупкой и продажей.
+    holding_time_seconds: Mapped[int | None] = mapped_column(nullable=True)
+
     profit: Mapped[Decimal] = mapped_column(Numeric(28, 12), default=0)
     roi: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
 

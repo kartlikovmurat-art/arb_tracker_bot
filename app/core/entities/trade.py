@@ -32,6 +32,14 @@ class Trade:
     gas_fee: Decimal = Decimal("0")
     slippage: Decimal = Decimal("0")
 
+    # Сеть перевода между биржами: ERC20, TRC20, BEP20, BTC,
+    # Arbitrum, TON, Internal (внутри одной биржи) и т.д.
+    transfer_network: Optional[str] = None
+
+    # Сколько секунд между покупкой и продажей. Если сделка ещё
+    # PENDING — None; заполняется при complete().
+    holding_time_seconds: Optional[int] = None
+
     strategy: Optional[str] = None
     note: Optional[str] = None
 
@@ -75,6 +83,27 @@ class Trade:
             + self.gas_fee
             + self.slippage
         )
+
+    @property
+    def holding_time_human(self) -> str:
+        """Красиво отформатированное время удержания сделки.
+
+        Возвращает «5 мин», «2 ч 15 мин», «3 д 4 ч» или «—»,
+        если время неизвестно.
+        """
+        secs = self.holding_time_seconds
+        if secs is None or secs <= 0:
+            return "—"
+        days, rem = divmod(secs, 86400)
+        hours, rem = divmod(rem, 3600)
+        minutes, _ = divmod(rem, 60)
+        if days > 0:
+            return f"{days} д {hours} ч"
+        if hours > 0:
+            return f"{hours} ч {minutes} мин"
+        if minutes > 0:
+            return f"{minutes} мин"
+        return f"{secs} сек"
 
     def complete(self) -> None:
         self.status = TradeStatus.COMPLETED

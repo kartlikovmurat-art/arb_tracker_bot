@@ -26,6 +26,11 @@ class CreateTradeDTO(BaseModel):
     gas_fee: Decimal = Decimal("0")
     slippage: Decimal = Decimal("0")
 
+    # Сеть перевода (ERC20 / TRC20 / BEP20 / BTC / ...). Опционально.
+    transfer_network: Optional[str] = None
+    # Время удержания в секундах. Опционально.
+    holding_time_seconds: Optional[int] = None
+
     trade_type: TradeType = TradeType.CEX_CEX
     status: TradeStatus = TradeStatus.PENDING
 

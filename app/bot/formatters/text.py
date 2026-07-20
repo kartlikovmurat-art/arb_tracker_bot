@@ -47,6 +47,22 @@ def _percent(value: Any) -> str:
     return f"{amount.quantize(Decimal('0.01'))}%"
 
 
+def _format_holding_time(secs: int) -> str:
+    """5 мин / 2 ч 15 мин / 3 д 4 ч."""
+    if secs <= 0:
+        return "—"
+    days, rem = divmod(secs, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, _ = divmod(rem, 60)
+    if days > 0:
+        return f"{days} д {hours} ч"
+    if hours > 0:
+        return f"{hours} ч {minutes} мин"
+    if minutes > 0:
+        return f"{minutes} мин"
+    return f"{secs} сек"
+
+
 def _short(value: Any, limit: int = 32) -> str:
     text = str(value) if value is not None else ""
     if len(text) <= limit:
@@ -77,7 +93,29 @@ def format_trade(trade: Mapping[str, Any]) -> str:
         trade.get("gas_fee")
     ) + _to_decimal(trade.get("slippage"))
     if fees > 0:
-        lines.append(f"Комиссии: {fees.quantize(Decimal('0.01'))}")
+        lines.append(f"💸 Комиссии: {fees.quantize(Decimal('0.01'))}")
+    # Детали комиссий — если хоть одна ненулевая
+    fee_parts = []
+    for label, key in [
+        ("покупка", "buy_fee"),
+        ("продажа", "sell_fee"),
+        ("вывод", "withdrawal_fee"),
+        ("газ", "gas_fee"),
+        ("проскальз.", "slippage"),
+    ]:
+        v = _to_decimal(trade.get(key))
+        if v > 0:
+            fee_parts.append(f"{label} {v.quantize(Decimal('0.01'))}")
+    if fee_parts and len(fee_parts) > 1:
+        lines.append(f"   └ {', '.join(fee_parts)}")
+    # Сеть перевода
+    network = trade.get("transfer_network")
+    if network:
+        lines.append(f"🔗 Сеть перевода: <b>{_short(network, 20)}</b>")
+    # Время удержания
+    holding = trade.get("holding_time_seconds")
+    if holding is not None and int(holding) > 0:
+        lines.append(f"⏱ Время удержания: <b>{_format_holding_time(int(holding))}</b>")
     profit = _to_decimal(trade.get("profit"))
     profit_emoji = "🟢" if profit > 0 else ("🔴" if profit < 0 else "⚪️")
     lines.append(
@@ -105,9 +143,18 @@ def format_trade_compact(trade: Mapping[str, Any]) -> str:
     coin = _short(trade.get("coin", "—"), 8)
     buy = _short(trade.get("buy_exchange", "—"), 12)
     sell = _short(trade.get("sell_exchange", "—"), 12)
+    # Дополнительные теги: сеть и время
+    extras = []
+    network = trade.get("transfer_network")
+    if network:
+        extras.append(_short(network, 8))
+    holding = trade.get("holding_time_seconds")
+    if holding is not None and int(holding) > 0:
+        extras.append(_format_holding_time(int(holding)))
+    extras_str = f" · {', '.join(extras)}" if extras else ""
     return (
         f"#{trade.get('id', '—')} · {coin} {buy}→{sell} · "
-        f"{profit_emoji}{_money(profit)} ({roi})"
+        f"{profit_emoji}{_money(profit)} ({roi}){extras_str}"
     )
 
 
