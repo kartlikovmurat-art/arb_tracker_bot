@@ -1,0 +1,48 @@
+# ── окружение ─────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── IDE ──────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── данные проекта ──────────────────────────────────────
+# локальные БД
+*.sqlite3
+*.db
+*.sqlite
+# служебные файлы, которые генерит код
+data/*.db
+data/*.sqlite3
+exports/*.xlsx
+exports/*.csv
+exports/*.zip
+logs/
+*.log
+# alembic
+alembic/__pycache__/
+alembic/versions/__pycache__/
+
+# ── временные файлы разработки ─────────────────────────
+tmp_*.py
+tmp_*.db
+test_debug*.db
+test_api.db
+/tmp/
+/tmp/*

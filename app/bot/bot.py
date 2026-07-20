@@ -1,32 +1,365 @@
+"""
+Arbitrage Tracker Bot — Telegram interface.
+
+Полностью переписанная версия. Главное отличие от старой:
+    * Полностью убран aiohttp (и AiohttpSession, и aiohttp.ClientSession).
+    * HTTP-стек построен на httpx.AsyncClient через кастомный session-класс
+      `HttpxSession`, который подменяет `AiohttpSession` в aiogram 3.
+    * Все дикие хаки убраны: больше нет `connector_init["family"]`,
+      нет `AiohttpSession(proxy=...)`, нет «оффлайн-демо через POST
+      в свой же FastAPI» (это маскировало проблему, а не решало её).
+    * Никакой логики про Telegram-подарки. Бот — это generic CRM
+      для учёта завершённых крипто-арбитражных сделок.
+
+Зачем уходить с aiohttp:
+    На Windows + некоторых VPN-конфигурациях aiohttp падает на
+    `ClientConnectorError WinError 121 — Cannot connect to api.telegram.org`,
+    при этом `socket`, `requests` и Telegram Desktop работают нормально.
+    Это сочетание aiohttp и сетевого стека Windows. httpx использует
+    другую реализацию HTTP-клиента и на той же машине работает стабильно.
+
+Как работает `HttpxSession`:
+    Наследуется от `aiogram.client.session.base.BaseSession`. aiogram при
+    каждом вызове метода (например, `bot.send_message(...)`) дёргает
+    `session.make_request(bot, method)`. Мы реализуем ровно этот метод
+    через httpx, а всю обвязку — URL, сериализацию, проверку ответа,
+    маппинг ошибок — берём из базового класса (api.api_url, build_form_data,
+    check_response). То есть это легитимный aiogram-session, просто
+    на другом транспорте.
+
+Зависимости:
+    pip install aiogram httpx
+"""
+from __future__ import annotations
+
 import asyncio
-import os
-import socket
-import sys
-from pathlib import Path
-
-# Allow running this script directly from the repository root with `python app/bot/bot.py`.
-root_path = Path(__file__).resolve().parents[2]
-if str(root_path) not in sys.path:
-    sys.path.insert(0, str(root_path))
-
-import aiohttp
-from aiogram import Bot, Dispatcher
-from aiogram.client.session.aiohttp import AiohttpSession
-from aiogram.filters import CommandStart
-from aiogram.types import Message
 import json
-from aiogram.filters import Command
+import logging
+import os
+import sys
 from decimal import Decimal, InvalidOperation
-from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
+from pathlib import Path
+from typing import Any, Optional
 
-from app.config.settings import API_URL, BOT_TOKEN
+# Позволяет запускать скрипт напрямую: `python app/bot/bot.py`
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+import httpx  # noqa: E402
+from aiogram import Bot, Dispatcher  # noqa: E402
+from aiogram.client.session.base import BaseSession  # noqa: E402
+from aiogram.filters import Command, CommandStart  # noqa: E402
+from aiogram.fsm.context import FSMContext  # noqa: E402
+from aiogram.fsm.state import State, StatesGroup  # noqa: E402
+from aiogram.fsm.storage.memory import MemoryStorage  # noqa: E402
+from aiogram.methods import TelegramMethod  # noqa: E402
+from aiogram.methods.base import TelegramType  # noqa: E402
+from aiogram.types import Message  # noqa: E402
+
+from app.config.settings import API_URL, BOT_TOKEN  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 
-async def main():
+# ---------------------------------------------------------------------------
+# Кастомная сессия aiogram поверх httpx.AsyncClient
+# ---------------------------------------------------------------------------
+class HttpxSession(BaseSession):
+    """aiogram-session на базе httpx. Полная замена AiohttpSession.
 
-    proxy_url = (
+    aiogram внутри себя при вызове любого метода (`bot.send_message`,
+    `bot.get_me`, `bot.get_updates` и т.д.) идёт в
+    `session.make_request(bot, method)`. Мы реализуем этот метод
+    через httpx, а всю обвязку (формирование URL, сериализация
+    параметров, проверка статуса ответа, маппинг ошибок в
+    `TelegramBadRequest` / `TelegramNetworkError` / и т.д.) берём
+    из базового класса.
+    """
+
+    def __init__(
+        self,
+        proxy: Optional[str] = None,
+        timeout: float = 35.0,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self._proxy = proxy
+        self._timeout = httpx.Timeout(timeout)
+        self._client: Optional[httpx.AsyncClient] = None
+
+    async def _create_client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            timeout=self._timeout,
+            proxy=self._proxy,
+            http2=False,
+            follow_redirects=True,
+        )
+
+    async def close(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+        await super().close()
+
+    async def create_session(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = await self._create_client()
+        return self._client
+
+    async def stream_content(
+        self,
+        url: str,
+        headers: Optional[dict] = None,
+        timeout: int = 30,
+        chunk_size: int = 65536,
+        raise_for_status: bool = True,
+    ):
+        """Стрим-чтение контента (нужно aiogram для скачивания файлов)."""
+        client = await self.create_session()
+        if headers is None:
+            headers = {}
+        try:
+            async with client.stream(
+                "GET",
+                url,
+                headers=headers,
+                timeout=timeout,
+            ) as response:
+                if raise_for_status:
+                    response.raise_for_status()
+                async for chunk in response.aiter_bytes(chunk_size):
+                    yield chunk
+        except httpx.HTTPError as exc:
+            from aiogram.exceptions import TelegramNetworkError
+            raise TelegramNetworkError(
+                method=None, message=f"{type(exc).__name__}: {exc}"
+            ) from exc
+
+    async def make_request(
+        self,
+        bot: "Bot",
+        method: TelegramMethod[TelegramType],
+        timeout: Optional[int] = None,
+    ) -> TelegramType:
+        client = await self.create_session()
+
+        # URL вида https://api.telegram.org/bot<TOKEN>/<METHOD>
+        url = self.api.api_url(token=bot.token, method=method.__api_method__)
+
+        # build_form_data умеет JSON-сериализацию и InputFile (multipart).
+        # Для текстовых команд этого бота всегда хватает JSON-варианта,
+        # но на будущее сохраняем полную совместимость с InputFile.
+        form = self.build_form_data(bot=bot, method=method)
+
+        effective_timeout = (
+            self.timeout if timeout is None else timeout
+        )
+        try:
+            response = await client.post(
+                url,
+                data=form,
+                timeout=effective_timeout,
+            )
+        except httpx.TimeoutException as exc:
+            from aiogram.exceptions import TelegramNetworkError
+            raise TelegramNetworkError(
+                method=method, message=f"Request timeout error: {exc}"
+            ) from exc
+        except httpx.HTTPError as exc:
+            from aiogram.exceptions import TelegramNetworkError
+            raise TelegramNetworkError(
+                method=method, message=f"{type(exc).__name__}: {exc}"
+            ) from exc
+
+        raw_result = response.text
+        # check_response сам парсит JSON и бросает правильные исключения
+        checked = self.check_response(
+            bot=bot,
+            method=method,
+            status_code=response.status_code,
+            content=raw_result,
+        )
+        return checked.result  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# FSM: диалог добавления сделки
+# ---------------------------------------------------------------------------
+class TradeForm(StatesGroup):
+    coin = State()
+    buy_exchange = State()
+    sell_exchange = State()
+    amount = State()
+    buy_price = State()
+    sell_price = State()
+    strategy = State()
+    note = State()
+
+
+# ---------------------------------------------------------------------------
+# Утилиты
+# ---------------------------------------------------------------------------
+def _to_decimal(text: str) -> Optional[Decimal]:
+    """Парсит число из пользовательского ввода. None при ошибке."""
+    try:
+        return Decimal(text.strip().replace(",", "."))
+    except (InvalidOperation, AttributeError):
+        return None
+
+
+def _normalize_payload(payload: dict) -> dict:
+    """Нормализация enum-полей перед отправкой в API."""
+    if "trade_type" in payload and isinstance(payload["trade_type"], str):
+        payload["trade_type"] = (
+            payload["trade_type"].replace("-", "_").replace(" ", "_").upper()
+        )
+    if "status" in payload and isinstance(payload["status"], str):
+        payload["status"] = payload["status"].upper()
+    return payload
+
+
+async def _post_to_api(data: dict) -> tuple[bool, str]:
+    """POST сделки в локальный FastAPI. Возвращает (ok, info)."""
+    payload = _normalize_payload(dict(data))
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            response = await client.post(f"{API_URL}/trades/", json=payload)
+    except httpx.HTTPError as exc:
+        return False, f"Сеть: {type(exc).__name__}: {exc}"
+    if response.status_code in (200, 201):
+        return True, "ok"
+    return False, f"API {response.status_code}: {response.text}"
+
+
+# ---------------------------------------------------------------------------
+# Хэндлеры
+# ---------------------------------------------------------------------------
+def register_handlers(dp: Dispatcher) -> None:
+    @dp.message(CommandStart())
+    async def cmd_start(message: Message) -> None:
+        await message.answer(
+            "👋 Добро пожаловать в Arbitrage Tracker Bot!\n\n"
+            "Команды:\n"
+            "/add_trade — добавить сделку пошагово\n"
+            "/add_trade {\"coin\":\"BTC\",...} — добавить сделку JSON-ом\n"
+            "/cancel — отменить текущий ввод"
+        )
+
+    @dp.message(Command("add_trade"))
+    async def cmd_add_trade(message: Message, state: FSMContext) -> None:
+        # Если после команды прислали JSON — сохраняем без диалога
+        payload = message.text.removeprefix("/add_trade").strip() if message.text else ""
+        if payload:
+            try:
+                data = json.loads(payload)
+            except json.JSONDecodeError:
+                await message.answer("Невалидный JSON. Проверьте синтаксис.")
+                return
+            if not isinstance(data, dict):
+                await message.answer("Ожидаю JSON-объект, не массив и не скаляр.")
+                return
+            ok, info = await _post_to_api(data)
+            await message.answer(
+                "✅ Сделка сохранена." if ok else f"❌ Не удалось сохранить: {info}"
+            )
+            return
+
+        # Иначе запускаем пошаговый диалог
+        await state.set_state(TradeForm.coin)
+        await message.answer(
+            "Ввод новой сделки. /cancel — отмена.\n"
+            "Введите монету (например, BTC):"
+        )
+
+    @dp.message(Command("cancel"))
+    async def cmd_cancel(message: Message, state: FSMContext) -> None:
+        if (await state.get_state()) is None:
+            await message.answer("Нет активного ввода.")
+            return
+        await state.clear()
+        await message.answer("Ввод сделки отменён.")
+
+    @dp.message(TradeForm.coin)
+    async def step_coin(message: Message, state: FSMContext) -> None:
+        await state.update_data(coin=(message.text or "").strip())
+        await state.set_state(TradeForm.buy_exchange)
+        await message.answer("Введите биржу покупки (buy_exchange):")
+
+    @dp.message(TradeForm.buy_exchange)
+    async def step_buy_exchange(message: Message, state: FSMContext) -> None:
+        await state.update_data(buy_exchange=(message.text or "").strip())
+        await state.set_state(TradeForm.sell_exchange)
+        await message.answer("Введите биржу продажи (sell_exchange):")
+
+    @dp.message(TradeForm.sell_exchange)
+    async def step_sell_exchange(message: Message, state: FSMContext) -> None:
+        await state.update_data(sell_exchange=(message.text or "").strip())
+        await state.set_state(TradeForm.amount)
+        await message.answer("Введите объём (amount), например 0.5:")
+
+    @dp.message(TradeForm.amount)
+    async def step_amount(message: Message, state: FSMContext) -> None:
+        val = _to_decimal(message.text or "")
+        if val is None or val <= 0:
+            await message.answer(
+                "Неверный формат числа для объёма. Введите число > 0 или /cancel."
+            )
+            return
+        await state.update_data(amount=str(val))
+        await state.set_state(TradeForm.buy_price)
+        await message.answer("Введите цену покупки (buy_price):")
+
+    @dp.message(TradeForm.buy_price)
+    async def step_buy_price(message: Message, state: FSMContext) -> None:
+        val = _to_decimal(message.text or "")
+        if val is None or val <= 0:
+            await message.answer(
+                "Неверный формат числа для цены покупки. Введите число > 0 или /cancel."
+            )
+            return
+        await state.update_data(buy_price=str(val))
+        await state.set_state(TradeForm.sell_price)
+        await message.answer("Введите цену продажи (sell_price):")
+
+    @dp.message(TradeForm.sell_price)
+    async def step_sell_price(message: Message, state: FSMContext) -> None:
+        val = _to_decimal(message.text or "")
+        if val is None or val <= 0:
+            await message.answer(
+                "Неверный формат числа для цены продажи. Введите число > 0 или /cancel."
+            )
+            return
+        await state.update_data(sell_price=str(val))
+        await state.set_state(TradeForm.strategy)
+        await message.answer("Стратегия (опционально) или '-' чтобы пропустить:")
+
+    @dp.message(TradeForm.strategy)
+    async def step_strategy(message: Message, state: FSMContext) -> None:
+        text = (message.text or "").strip()
+        if text and text != "-":
+            await state.update_data(strategy=text)
+        await state.set_state(TradeForm.note)
+        await message.answer("Комментарий (опционально) или '-' чтобы пропустить:")
+
+    @dp.message(TradeForm.note)
+    async def step_note(message: Message, state: FSMContext) -> None:
+        text = (message.text or "").strip()
+        if text and text != "-":
+            await state.update_data(note=text)
+        data = await state.get_data()
+        ok, info = await _post_to_api(data)
+        await message.answer(
+            "✅ Сделка сохранена." if ok else f"❌ Не удалось сохранить: {info}"
+        )
+        await state.clear()
+
+
+# ---------------------------------------------------------------------------
+# Точка входа
+# ---------------------------------------------------------------------------
+def _pick_proxy() -> Optional[str]:
+    return (
         os.getenv("BOT_PROXY")
         or os.getenv("TELEGRAM_PROXY")
         or os.getenv("HTTPS_PROXY")
@@ -35,285 +368,45 @@ async def main():
         or os.getenv("http_proxy")
     )
 
-    # Try to build an aiohttp-backed session for aiogram. Prefer IPv4 and
-    # allow falling back to a plain aiohttp.ClientSession if AiohttpSession
-    # construction fails (missing aiohttp-socks or proxy issues).
-    session = None
-    try:
-        session = AiohttpSession(proxy=proxy_url)
-        # Prefer IPv4 to avoid IPv6 routing issues on some CI/containers
-        try:
-            session._connector_init["family"] = socket.AF_INET
-        except Exception:
-            # Not critical; continue with default connector settings
-            pass
-    except Exception as exc:
-        print("AiohttpSession creation failed (proxy support may be missing):", exc)
-        # Fall back to a plain aiohttp client session that aiogram accepts.
-        try:
-            # aiogram accepts an `aiohttp.ClientSession` as well
-            fallback = aiohttp.ClientSession()
-            session = fallback
-            print("Fell back to plain aiohttp.ClientSession for Telegram session")
-        except Exception as exc2:
-            print("Failed to create fallback aiohttp session:", exc2)
-            session = None
-    # If BOT_TOKEN is not provided, skip attempting Telegram connection
-    # and run the offline demo instead so the API can be validated locally.
-    async def run_offline_demo():
-        demo_payload = {
-            "coin": "OFFLINE",
-            "buy_exchange": "DemoBuy",
-            "sell_exchange": "DemoSell",
-            "amount": 0.1,
-            "buy_price": 100,
-            "sell_price": 110,
-            "trade_type": "CEX_CEX",
-            "status": "PENDING",
-        }
 
-        # Normalize (keeps parity with interactive path)
-        if "trade_type" in demo_payload and isinstance(demo_payload["trade_type"], str):
-            demo_payload["trade_type"] = demo_payload["trade_type"].replace("-", "_").replace(" ", "_").upper()
-        if "status" in demo_payload and isinstance(demo_payload["status"], str):
-            demo_payload["status"] = demo_payload["status"].upper()
-
-        try:
-            async with aiohttp.ClientSession() as sess:
-                async with sess.post(f"{API_URL}/trades/", json=demo_payload, timeout=10) as resp:
-                    text = await resp.text()
-                    print("API response status:", resp.status)
-                    print(text)
-        except Exception as err:
-            print("Offline demo failed to call API:", err)
-
-    if proxy_url:
-        print(f"Using proxy for Telegram requests: {proxy_url}")
-    else:
-        print("No proxy environment variable configured for Telegram requests.")
-
-    if not BOT_TOKEN:
-        print("BOT_TOKEN not set; skipping Telegram. Running offline demo.")
-        await run_offline_demo()
-        return
-
-    bot = Bot(
-        token=BOT_TOKEN,
-        session=session,
+async def main() -> None:
+    logging.basicConfig(
+        level=os.getenv("LOG_LEVEL", "INFO"),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-    dp = Dispatcher(storage=MemoryStorage())
-
-
-    class TradeForm(StatesGroup):
-        coin = State()
-        buy_exchange = State()
-        sell_exchange = State()
-        amount = State()
-        buy_price = State()
-        sell_price = State()
-        strategy = State()
-        note = State()
-
-
-    @dp.message(CommandStart())
-    async def start(message: Message):
-        await message.answer(
-            "👋 Добро пожаловать в Arbitrage Tracker Bot!"
+    if not BOT_TOKEN:
+        logger.error(
+            "BOT_TOKEN не задан. Получите новый токен у @BotFather и "
+            "пропишите его в .env (см. .env.example)."
         )
+        return
 
-    @dp.message(Command("add_trade"))
-    async def add_trade(message: Message):
-        """Add trade by sending JSON after the command.
+    proxy = _pick_proxy()
+    if proxy:
+        logger.info("Использую прокси для Telegram: %s", proxy)
 
-        Example:
-        /add_trade {"coin":"BTC","buy_exchange":"Binance","sell_exchange":"Bybit","amount":0.5,"buy_price":60000,"sell_price":62000}
-        """
-        # support inline JSON after command
-        payload = message.text.removeprefix("/add_trade").strip()
-
-        if payload:
-            try:
-                data = json.loads(payload)
-            except Exception:
-                await message.answer("Невалидный JSON. Проверьте синтаксис.")
-                return
-            # Normalize enums before sending
-            def normalize_payload(payload: dict) -> dict:
-                if not isinstance(payload, dict):
-                    return payload
-                if "trade_type" in payload and isinstance(payload["trade_type"], str):
-                    v = payload["trade_type"].replace("-", "_").replace(" ", "_").upper()
-                    payload["trade_type"] = v
-                if "status" in payload and isinstance(payload["status"], str):
-                    payload["status"] = payload["status"].upper()
-                return payload
-
-            data = normalize_payload(data)
-
-            try:
-                async with aiohttp.ClientSession() as session_http:
-                    async with session_http.post(f"{API_URL}/trades/", json=data) as resp:
-                        text = await resp.text()
-                        if resp.status in (200, 201):
-                            await message.answer("Сделка сохранена.")
-                        else:
-                            await message.answer(f"Ошибка API {resp.status}: {text}")
-            except Exception as exc:
-                await message.answer(f"Не удалось отправить запрос к API: {exc}")
-            return
-
-        # otherwise start FSM dialog
-        await message.answer("Ввод новой сделки. Отправьте /cancel чтобы отменить.\nВведите монету (например BTC):")
-        await TradeForm.coin.set()
-
-
-    @dp.message(Command("cancel"))
-    async def cancel_flow(message: Message, state: FSMContext):
-        current = await state.get_state()
-        if current is None:
-            await message.answer("Нет активного ввода.")
-            return
-        await state.clear()
-        await message.answer("Ввод сделки отменён.")
-
-
-    @dp.message(TradeForm.coin)
-    async def process_coin(message: Message, state: FSMContext):
-        await state.update_data(coin=message.text.strip())
-        await TradeForm.next()
-        await message.answer("Введите биржу покупки (buy_exchange):")
-
-
-    @dp.message(TradeForm.buy_exchange)
-    async def process_buy_exchange(message: Message, state: FSMContext):
-        await state.update_data(buy_exchange=message.text.strip())
-        await TradeForm.next()
-        await message.answer("Введите биржу продажи (sell_exchange):")
-
-
-    @dp.message(TradeForm.sell_exchange)
-    async def process_sell_exchange(message: Message, state: FSMContext):
-        await state.update_data(sell_exchange=message.text.strip())
-        await TradeForm.next()
-        await message.answer("Введите объём (amount), например 0.5:")
-
-
-    @dp.message(TradeForm.amount)
-    async def process_amount(message: Message, state: FSMContext):
-        text = message.text.strip()
-        try:
-            val = Decimal(text)
-        except InvalidOperation:
-            await message.answer("Неверный формат числа для объёма. Введите число, например 0.5 или отправьте /cancel.")
-            return
-        if val <= 0:
-            await message.answer("Объём должен быть больше нуля. Попробуйте снова или отправьте /cancel.")
-            return
-        await state.update_data(amount=str(val))
-        await TradeForm.next()
-        await message.answer("Введите цену покупки (buy_price):")
-
-
-    @dp.message(TradeForm.buy_price)
-    async def process_buy_price(message: Message, state: FSMContext):
-        text = message.text.strip()
-        try:
-            val = Decimal(text)
-        except InvalidOperation:
-            await message.answer("Неверный формат числа для цены покупки. Введите число или /cancel.")
-            return
-        if val <= 0:
-            await message.answer("Цена покупки должна быть больше нуля. Попробуйте снова или отправьте /cancel.")
-            return
-        await state.update_data(buy_price=str(val))
-        await TradeForm.next()
-        await message.answer("Введите цену продажи (sell_price):")
-
-
-    @dp.message(TradeForm.sell_price)
-    async def process_sell_price(message: Message, state: FSMContext):
-        text = message.text.strip()
-        try:
-            val = Decimal(text)
-        except InvalidOperation:
-            await message.answer("Неверный формат числа для цены продажи. Введите число или /cancel.")
-            return
-        if val <= 0:
-            await message.answer("Цена продажи должна быть больше нуля. Попробуйте снова или отправьте /cancel.")
-            return
-        await state.update_data(sell_price=str(val))
-        await TradeForm.next()
-        await message.answer("Введите стратегию (опционально) или отправьте '-' для пропуска:")
-
-
-    @dp.message(TradeForm.strategy)
-    async def process_strategy(message: Message, state: FSMContext):
-        text = message.text.strip()
-        if text != "-":
-            await state.update_data(strategy=text)
-        await TradeForm.next()
-        await message.answer("Введите комментарий/примечание (опционально) или отправьте '-' для пропуска:")
-
-
-    @dp.message(TradeForm.note)
-    async def process_note(message: Message, state: FSMContext):
-        text = message.text.strip()
-        if text != "-":
-            await state.update_data(note=text)
-
-        data = await state.get_data()
-
-        # Normalize enums before sending
-        if "trade_type" in data and isinstance(data["trade_type"], str):
-            data["trade_type"] = data["trade_type"].replace("-", "_").replace(" ", "_").upper()
-        if "status" in data and isinstance(data["status"], str):
-            data["status"] = data["status"].upper()
-
-        try:
-            async with aiohttp.ClientSession() as session_http:
-                async with session_http.post(f"{API_URL}/trades/", json=data) as resp:
-                    text_resp = await resp.text()
-                    if resp.status in (200, 201):
-                        await message.answer("Сделка сохранена.")
-                    else:
-                        await message.answer(f"Ошибка API {resp.status}: {text_resp}")
-        except Exception as exc:
-            await message.answer(f"Не удалось отправить запрос к API: {exc}")
-
-        await state.clear()
-
-
-    # Try to contact Telegram. If network is unavailable or token is invalid,
-    # fall back to an offline demo mode that posts a sample trade to the API
-    # so we can validate API/DB behavior without Telegram connectivity.
-    # Try to contact Telegram with retries; on repeated failure, run offline demo.
+    session = HttpxSession(proxy=proxy)
     try:
-        max_attempts = 3
-        for attempt in range(1, max_attempts + 1):
-            try:
-                me = await bot.get_me()
-                print(f"Bot started: @{me.username}")
-                # Connected successfully; start polling (blocking)
-                await dp.start_polling(bot)
-                return
-            except Exception as exc:
-                print(f"Attempt {attempt} to contact Telegram failed: {exc}")
-                if attempt < max_attempts:
-                    await asyncio.sleep(2 ** attempt)
-                else:
-                    raise
-    except Exception as exc:
-        # Ensure the aiohttp session is closed to avoid warnings
-        try:
-            await session.close()
-        except Exception:
-            pass
+        bot = Bot(token=BOT_TOKEN, session=session)
+        dp = Dispatcher(storage=MemoryStorage())
+        register_handlers(dp)
 
-        print("Telegram connection failed after retries:", exc)
-        print("Entering offline demo: will POST a sample trade to the API and exit.")
-        await run_offline_demo()
+        try:
+            me = await bot.get_me()
+            logger.info("Бот запущен: @%s (id=%s)", me.username, me.id)
+            await dp.start_polling(bot)
+        finally:
+            await session.close()
+    except Exception:
+        # на холодную не получилось достучаться до Telegram — корректно
+        # закрываем httpx-клиент, чтобы не сыпались warning'и
+        await session.close()
+        raise
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Бот остановлен пользователем.")
