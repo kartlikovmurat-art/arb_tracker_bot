@@ -15,7 +15,7 @@ from app.bot.formatters import (
 )
 from app.bot.formatters.text import PAGE_SIZE
 from app.bot.handlers._pagination_view import build_trades_view
-from app.bot.keyboards import trades_pager
+from app.bot.keyboards import trade_actions_kb, trades_pager
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ async def cmd_trades_id(
             else f"❌ Ошибка API: {exc.detail or exc}"
         )
         return
-    await message.answer(format_trade(trade))
+    await message.answer(format_trade(trade), reply_markup=trade_actions_kb(int(args)))
 
 
 async def cmd_trades_coin(

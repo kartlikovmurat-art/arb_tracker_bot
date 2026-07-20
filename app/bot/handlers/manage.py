@@ -152,31 +152,8 @@ def _parse_kv(text: str) -> dict[str, Any]:
 
 
 def _trade_actions_kb(trade_id: int):
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="✏️  Редактировать",
-                    callback_data=f"trades:edit:{trade_id}",
-                ),
-                InlineKeyboardButton(
-                    text="✅  Подтвердить",
-                    callback_data=f"trades:complete:{trade_id}",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🗑  Удалить",
-                    callback_data=f"trades:delete:{trade_id}",
-                ),
-                InlineKeyboardButton(
-                    text="🔙  К списку",
-                    callback_data="menu:trades",
-                ),
-            ],
-        ]
-    )
+    """Backwards-compat alias. Реальная функция — trade_actions_kb."""
+    return trade_actions_kb(trade_id)
 
 
 async def _on_edit_inline(

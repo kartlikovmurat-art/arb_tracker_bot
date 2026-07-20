@@ -2,6 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api.trades import router as trades_router
 from app.api.statistics import router as statistics_router
@@ -27,6 +28,7 @@ from app.api.export import (
     router as export_router,
 )
 from app.api.extras import router as extras_router
+from app.api.webapp import _WEBAPP_DIR, router as webapp_router
 
 from app.infrastructure.database import create_tables
 
@@ -61,6 +63,11 @@ app.include_router(equity_curve_router)
 
 app.include_router(export_router)
 app.include_router(extras_router)
+app.include_router(webapp_router)
+
+# Статические файлы мини-приложения (CSS/JS, если появятся).
+if _WEBAPP_DIR.exists():
+    app.mount("/webapp/static", StaticFiles(directory=str(_WEBAPP_DIR)), name="webapp-static")
 
 
 @app.get("/")

@@ -29,6 +29,7 @@ from app.bot.handlers.help_text import HELP_TEXT
 from app.bot.keyboards import (
     BTN_ADD,
     BTN_ANALYTICS,
+    BTN_APP,
     BTN_BACKUP,
     BTN_CALC,
     BTN_EXPORT,
@@ -65,6 +66,7 @@ REPLY_MENU_ACTIONS: dict[str, str] = {
     BTN_EXPORT: "export",
     BTN_BACKUP: "backup",
     BTN_HELP: "help",
+    BTN_APP: "app",
 }
 
 
@@ -507,6 +509,25 @@ async def reply_menu_router(
             await message.answer_document(
                 document=document,
                 caption=f"💾  <b>Бэкап готов!</b>\n{len(data)} байт",
+            )
+        elif action == "app":
+            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+            await message.answer(
+                "🌐  <b>Mini App</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Открой мини-приложение для управления сделками\n"
+                "прямо в Telegram — с фильтрами, графиками и формами.\n\n"
+                "Нажми кнопку ниже:",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="🌐  Открыть Mini App",
+                                url="https://t.me/arb_tracker_cex_bot?startapp=open",
+                            )
+                        ]
+                    ]
+                ),
             )
     except Exception as exc:  # noqa: BLE001
         logger.exception("reply_menu_router error")

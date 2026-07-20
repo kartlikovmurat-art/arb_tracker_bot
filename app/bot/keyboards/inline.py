@@ -206,3 +206,34 @@ def help_menu() -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+# ── Кнопки действий с конкретной сделкой ───────────────────────────
+def trade_actions_kb(trade_id: int, *, with_back: bool = True) -> InlineKeyboardMarkup:
+    """Редактировать / Подтвердить / Удалить — на карточке сделки."""
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text="✏️  Редактировать",
+                callback_data=f"trades:edit:{trade_id}",
+            ),
+            InlineKeyboardButton(
+                text="✅  Подтвердить",
+                callback_data=f"trades:complete:{trade_id}",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="🗑  Удалить",
+                callback_data=f"trades:delete:ask:{trade_id}",
+            ),
+        ],
+    ]
+    if with_back:
+        rows.append([
+            InlineKeyboardButton(
+                text="🔙  К списку",
+                callback_data="menu:trades",
+            ),
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
