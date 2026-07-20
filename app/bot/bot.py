@@ -242,7 +242,13 @@ async def main() -> None:
     await api.start()
 
     try:
-        bot = Bot(token=BOT_TOKEN, session=session)
+        from aiogram.client.default import DefaultBotProperties
+
+        bot = Bot(
+            token=BOT_TOKEN,
+            session=session,
+            default=DefaultBotProperties(parse_mode="HTML"),
+        )
         dp = Dispatcher(storage=MemoryStorage())
         # Прокидываем api в workflow_data, чтобы хендлеры
         # могли его получить через аргумент ``api: ApiClient``.

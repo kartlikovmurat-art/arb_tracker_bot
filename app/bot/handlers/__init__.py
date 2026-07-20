@@ -1,8 +1,8 @@
-"""Регистрация всех хендлеров в диспетчере aiogram.
+"""Registration of all handlers in the aiogram dispatcher.
 
-Каждый подмодуль экспортирует ``register(dp, api, ...)`` — точка
-входа, которая вешает все обработчики своей группы. ``bot.py``
-просто вызывает ``register_all(dp, api)`` из этого файла.
+Each submodule exports ``register(dp, api, ...)`` which attaches its
+own handlers. ``bot.py`` just calls ``register_all(dp, api)`` from
+here.
 """
 from __future__ import annotations
 
@@ -14,18 +14,20 @@ from app.bot.handlers import (
     analytics,
     common,
     export,
+    menu,
     pagination,
     view,
 )
 
 
 def register_all(dp: Dispatcher, api: ApiClient) -> None:
-    """Подключает все группы хендлеров. Порядок не критичен."""
+    """Connect all handler groups. Order does not matter much, except
+    pagination must be registered to catch ``trades:page:*`` callbacks
+    even when they originate from the menu."""
     common.register(dp)
     add_trade.register(dp, api)
     view.register(dp, api)
     analytics.register(dp, api)
     export.register(dp, api)
-    # pagination должен идти ПОСЛЕ view, чтобы перехватывать callback'и
-    # ``trades:page:...`` независимо от того, откуда они пришли.
+    menu.register(dp, api)
     pagination.register(dp, api)

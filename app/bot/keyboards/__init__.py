@@ -1,5 +1,17 @@
-"""Инлайн-клавиатуры для навигации по страницам сделок."""
+"""Inline keyboards for the bot."""
 
-from app.bot.keyboards.inline import trades_pager, help_menu
+from app.bot.keyboards.inline import (
+    add_trade_menu,
+    analytics_menu,
+    help_menu,
+    main_menu,
+    trades_pager,
+)
 
-__all__ = ["trades_pager", "help_menu"]
+__all__ = [
+    "add_trade_menu",
+    "analytics_menu",
+    "help_menu",
+    "main_menu",
+    "trades_pager",
+]
