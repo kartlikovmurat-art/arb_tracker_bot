@@ -146,14 +146,46 @@ class HttpxSession(BaseSession):
     ) -> TelegramType:
         client = await self.create_session()
         url = self.api.api_url(token=bot.token, method=method.__api_method__)
-        form = self.build_form_data(bot=bot, method=method)
+
+        # Собираем форму вручную, потому что в aiogram 3.30 метод
+        # ``build_form_data`` переехал в ``AiohttpSession`` и возвращает
+        # специфичный для aiohttp ``FormData``. В ``BaseSession`` остался
+        # ``prepare_value``, на котором мы и собираем данные.
+        form: dict[str, Any] = {}
+        files: dict[str, Any] = {}
+        for key, value in method.model_dump(warnings=False).items():
+            prepared = self.prepare_value(value, bot=bot, files=files)
+            if prepared in (None, ""):
+                continue
+            form[key] = prepared
+
         effective_timeout = self.timeout if timeout is None else timeout
         try:
-            response = await client.post(
-                url,
-                data=form,
-                timeout=effective_timeout,
-            )
+            if files:
+                # multipart: в httpx файлы передаются как кортежи
+                # (filename, content, content_type).
+                multipart_files = {
+                    key: (
+                        f.filename or key,
+                        f.read(bot),
+                        f.content_type,
+                    )
+                    for key, f in files.items()
+                }
+                response = await client.post(
+                    url,
+                    data=form,
+                    files=multipart_files,
+                    timeout=effective_timeout,
+                )
+            else:
+                # Без файлов: посылаем JSON, как делает современный
+                # клиент Telegram Bot API.
+                response = await client.post(
+                    url,
+                    json=form,
+                    timeout=effective_timeout,
+                )
         except httpx.TimeoutException as exc:
             from aiogram.exceptions import TelegramNetworkError
             raise TelegramNetworkError(
