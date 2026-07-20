@@ -9,3 +9,5 @@ python-dotenv
 pytest
 pytest-asyncio
 respx>=0.21
+python-multipart
+matplotlib

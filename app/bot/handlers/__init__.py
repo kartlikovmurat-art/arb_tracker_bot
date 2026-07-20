@@ -1,9 +1,4 @@
-"""Registration of all handlers in the aiogram dispatcher.
-
-Each submodule exports ``register(dp, api, ...)`` which attaches its
-own handlers. ``bot.py`` just calls ``register_all(dp, api)`` from
-here.
-"""
+"""Registration of all handlers in the aiogram dispatcher."""
 from __future__ import annotations
 
 from aiogram import Dispatcher
@@ -12,8 +7,12 @@ from app.bot.api import ApiClient
 from app.bot.handlers import (
     add_trade,
     analytics,
+    backup_io,
+    calc,
     common,
     export,
+    extras,
+    manage,
     menu,
     pagination,
     view,
@@ -21,13 +20,15 @@ from app.bot.handlers import (
 
 
 def register_all(dp: Dispatcher, api: ApiClient) -> None:
-    """Connect all handler groups. Order does not matter much, except
-    pagination must be registered to catch ``trades:page:*`` callbacks
-    even when they originate from the menu."""
+    """Connect all handler groups."""
     common.register(dp)
     add_trade.register(dp, api)
+    calc.register(dp)
     view.register(dp, api)
+    manage.register(dp, api)
     analytics.register(dp, api)
     export.register(dp, api)
+    backup_io.register(dp, api)
+    extras.register(dp, api)
     menu.register(dp, api)
     pagination.register(dp, api)

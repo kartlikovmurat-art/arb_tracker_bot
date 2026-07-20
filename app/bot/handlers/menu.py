@@ -29,10 +29,16 @@ from app.bot.handlers.help_text import HELP_TEXT
 from app.bot.keyboards import (
     BTN_ADD,
     BTN_ANALYTICS,
+    BTN_BACKUP,
+    BTN_CALC,
     BTN_EXPORT,
+    BTN_GOAL,
     BTN_HELP,
+    BTN_LAST,
     BTN_STATS,
+    BTN_TODAY,
     BTN_TRADES,
+    BTN_WEEK,
     add_trade_menu,
     analytics_menu,
     main_menu,
@@ -49,9 +55,15 @@ logger = logging.getLogger(__name__)
 REPLY_MENU_ACTIONS: dict[str, str] = {
     BTN_ADD: "add",
     BTN_TRADES: "trades",
+    BTN_LAST: "last",
+    BTN_TODAY: "today",
+    BTN_WEEK: "week",
     BTN_STATS: "stats",
     BTN_ANALYTICS: "analytics",
+    BTN_GOAL: "goal",
+    BTN_CALC: "calc",
     BTN_EXPORT: "export",
+    BTN_BACKUP: "backup",
     BTN_HELP: "help",
 }
 
@@ -399,7 +411,109 @@ async def reply_menu_router(
         elif action == "help":
             from app.bot.handlers.help_text import HELP_TEXT
             await message.answer(HELP_TEXT, reply_markup=main_menu())
+        elif action == "last":
+            try:
+                trades = await api.list_trades()
+            except ApiError as exc:
+                await message.answer(f"❌ {exc.detail or exc}")
+                return
+            if not trades:
+                await message.answer("ℹ️ Сделок пока нет.")
+                return
+            from app.bot.formatters import format_trade
+            last = max(trades, key=lambda t: t.get("created_at", ""))
+            await message.answer(
+                "🕐  <b>Последняя сделка</b>\n\n" + format_trade(last),
+                reply_markup=main_menu(),
+            )
+        elif action == "today":
+            from datetime import datetime, timedelta, timezone
+            try:
+                trades = await api.list_trades()
+            except ApiError as exc:
+                await message.answer(f"❌ {exc.detail or exc}")
+                return
+            cutoff = datetime.now(timezone.utc) - timedelta(days=1)
+            today = []
+            for t in trades:
+                try:
+                    created = datetime.fromisoformat(
+                        str(t.get("created_at", "")).replace("Z", "+00:00")
+                    )
+                    if created >= cutoff:
+                        today.append(t)
+                except Exception:  # noqa: BLE001
+                    continue
+            if not today:
+                await message.answer("📅  Сегодня сделок не было.")
+                return
+            text, keyboard = build_trades_view(today, page=0)
+            await message.answer(
+                f"📅  <b>Сделки за сегодня</b> · {len(today)} шт.\n\n" + text,
+                reply_markup=keyboard or main_menu(),
+            )
+        elif action == "week":
+            from datetime import datetime, timedelta, timezone
+            try:
+                trades = await api.list_trades()
+            except ApiError as exc:
+                await message.answer(f"❌ {exc.detail or exc}")
+                return
+            cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+            week = []
+            for t in trades:
+                try:
+                    created = datetime.fromisoformat(
+                        str(t.get("created_at", "")).replace("Z", "+00:00")
+                    )
+                    if created >= cutoff:
+                        week.append(t)
+                except Exception:  # noqa: BLE001
+                    continue
+            if not week:
+                await message.answer("📆  За неделю сделок не было.")
+                return
+            text, keyboard = build_trades_view(week, page=0)
+            await message.answer(
+                f"📆  <b>Сделки за неделю</b> · {len(week)} шт.\n\n" + text,
+                reply_markup=keyboard or main_menu(),
+            )
+        elif action == "goal":
+            # Прогресс к цели — перенаправляем в extras.cmd_goal
+            from app.bot.handlers.extras import cmd_goal as _goal_handler
+            from aiogram.types import Message as _Msg
+            fake = type("F", (), {"text": "/goal", "answer": message.answer})()
+            await _goal_handler(fake, _CommandLike(args=""), api)
+        elif action == "calc":
+            await message.answer(
+                "🧮  <b>Калькулятор</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Отправь <code>/calc</code> — бот попросит параметры по очереди."
+            )
+        elif action == "backup":
+            await message.answer("⏳ Готовлю бэкап…")
+            try:
+                data = await api.backup_json()
+            except ApiError as exc:
+                await message.answer(f"❌ {exc.detail or exc}")
+                return
+            if not data:
+                await message.answer("ℹ️ База пуста.")
+                return
+            from datetime import datetime
+            from aiogram.types import BufferedInputFile
+            filename = f"trades_backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+            document = BufferedInputFile(data, filename=filename)
+            await message.answer_document(
+                document=document,
+                caption=f"💾  <b>Бэкап готов!</b>\n{len(data)} байт",
+            )
     except Exception as exc:  # noqa: BLE001
         logger.exception("reply_menu_router error")
         await message.answer(f"❌ Непредвиденная ошибка: {type(exc).__name__}: {exc}")
+
+
+class _CommandLike:
+    def __init__(self, args: str = "") -> None:
+        self.args = args
 

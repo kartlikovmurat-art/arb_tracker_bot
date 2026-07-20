@@ -26,6 +26,7 @@ from app.api.equity_curve import (
 from app.api.export import (
     router as export_router,
 )
+from app.api.extras import router as extras_router
 
 from app.infrastructure.database import create_tables
 
@@ -59,6 +60,7 @@ app.include_router(daily_statistics_router)
 app.include_router(equity_curve_router)
 
 app.include_router(export_router)
+app.include_router(extras_router)
 
 
 @app.get("/")

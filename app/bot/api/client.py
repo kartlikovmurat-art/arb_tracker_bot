@@ -131,6 +131,17 @@ class ApiClient:
             ) from exc
         return self._parse(response)
 
+    async def _patch(self, path: str, json: Mapping[str, Any]) -> Any:
+        await self.start()
+        assert self._client is not None
+        try:
+            response = await self._client.patch(path, json=dict(json))
+        except httpx.HTTPError as exc:
+            raise ApiError(
+                f"Сеть: {type(exc).__name__}: {exc}"
+            ) from exc
+        return self._parse(response)
+
     async def _post(self, path: str, json: Mapping[str, Any]) -> Any:
         await self.start()
         assert self._client is not None
@@ -199,6 +210,82 @@ class ApiClient:
     ) -> dict[str, Any]:
         """Создаёт сделку. На вход — dict, на выход — dict от API."""
         return await self._post("/trades/", dict(payload))  # type: ignore[return-value]
+
+    async def patch_trade(
+        self, trade_id: int, updates: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Частично обновляет сделку — только указанные поля."""
+        return await self._patch(f"/trades/{trade_id}", dict(updates))  # type: ignore[return-value]
+
+    async def delete_trade(self, trade_id: int) -> None:
+        await self.start()
+        assert self._client is not None
+        try:
+            response = await self._client.delete(f"/trades/{trade_id}")
+        except httpx.HTTPError as exc:
+            raise ApiError(f"Сеть: {type(exc).__name__}: {exc}") from exc
+        if response.status_code >= 400:
+            raise ApiError(
+                f"API {response.status_code}",
+                status_code=response.status_code,
+                detail=response.text,
+            )
+
+    async def complete_trade(self, trade_id: int) -> dict[str, Any]:
+        """Переводит сделку PENDING → COMPLETED с пересчётом P/L."""
+        return await self._post(f"/trades/{trade_id}/complete", {})  # type: ignore[return-value]
+
+    async def search_trades(self, query: str) -> list[dict[str, Any]]:
+        """Полнотекстовый поиск по сделкам."""
+        return await self._get("/trades/search", q=query)  # type: ignore[return-value]
+
+    # ------------------------------------------------------------------ #
+    # Backup & Import
+    # ------------------------------------------------------------------ #
+    async def backup_json(self) -> bytes:
+        """Скачивает JSON-бэкап всей базы."""
+        await self.start()
+        assert self._client is not None
+        try:
+            response = await self._client.get("/backup")
+        except httpx.HTTPError as exc:
+            raise ApiError(f"Сеть: {type(exc).__name__}: {exc}") from exc
+        if response.status_code >= 400:
+            raise ApiError(
+                f"API {response.status_code}",
+                status_code=response.status_code,
+                detail=response.text,
+            )
+        return response.content
+
+    async def import_json(self, payload: bytes) -> dict[str, Any]:
+        """Загружает JSON-бэкап в БД."""
+        await self.start()
+        assert self._client is not None
+        try:
+            response = await self._client.post(
+                "/import",
+                files={"file": ("backup.json", payload, "application/json")},
+            )
+        except httpx.HTTPError as exc:
+            raise ApiError(f"Сеть: {type(exc).__name__}: {exc}") from exc
+        return self._parse(response)  # type: ignore[return-value]
+
+    async def equity_chart(self) -> bytes:
+        """Скачивает PNG-график equity curve."""
+        await self.start()
+        assert self._client is not None
+        try:
+            response = await self._client.get("/statistics/equity/chart")
+        except httpx.HTTPError as exc:
+            raise ApiError(f"Сеть: {type(exc).__name__}: {exc}") from exc
+        if response.status_code >= 400:
+            raise ApiError(
+                f"API {response.status_code}",
+                status_code=response.status_code,
+                detail=response.text,
+            )
+        return response.content
 
     # ------------------------------------------------------------------ #
     # Statistics
