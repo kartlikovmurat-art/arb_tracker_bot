@@ -163,15 +163,25 @@ class HttpxSession(BaseSession):
         try:
             if files:
                 # multipart: в httpx файлы передаются как кортежи
-                # (filename, content, content_type).
-                multipart_files = {
-                    key: (
-                        f.filename or key,
-                        f.read(bot),
-                        f.content_type,
-                    )
-                    for key, f in files.items()
-                }
+                # (filename, content, content_type). aiogram 3.30
+                # ``BufferedInputFile``/``InputFile`` не предоставляют
+                # ``content_type`` явно — выводим mime из имени файла,
+                # а если не получается, ставим application/octet-stream.
+                import mimetypes
+
+                async def _file_bytes(f: Any) -> bytes:
+                    if hasattr(f, "data") and isinstance(f.data, (bytes, bytearray)):
+                        return bytes(f.data)
+                    chunks = []
+                    async for chunk in f.read(bot):
+                        chunks.append(chunk)
+                    return b"".join(chunks)
+
+                multipart_files: dict[str, tuple[str, bytes, str]] = {}
+                for key, f in files.items():
+                    name = f.filename or key
+                    mime, _ = mimetypes.guess_type(name)
+                    multipart_files[key] = (name, await _file_bytes(f), mime or "application/octet-stream")
                 response = await client.post(
                     url,
                     data=form,
