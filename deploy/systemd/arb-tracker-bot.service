@@ -1,0 +1,28 @@
+# /etc/systemd/system/arb-tracker-bot.service
+# Supervisor (run_bot.py) сам перезапускает main() при падении, поэтому
+# здесь Restart=always не обязателен — но на случай OOM или hard kill
+# systemd всё равно поднимет процесс.
+
+[Unit]
+Description=Arbitrage Tracker — Telegram bot (with auto-restart)
+After=network.target arb-tracker-api.service
+Wants=arb-tracker-api.service
+
+[Service]
+Type=simple
+User=arb
+Group=arb
+WorkingDirectory=/opt/arb-tracker
+EnvironmentFile=/opt/arb-tracker/.env
+ExecStart=/opt/arb-tracker/.venv/bin/python run_bot.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/arb-tracker/bot.log
+StandardError=append:/var/log/arb-tracker/bot.log
+
+# Если хотите увеличить лимит backoff, допишите в .env:
+#   BOT_MAX_BACKOFF_SEC=60
+#   LOG_LEVEL=INFO
+
+[Install]
+WantedBy=multi-user.target
