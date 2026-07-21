@@ -156,7 +156,30 @@ pytest -q
 - Текстовые форматтеры (`tests/test_bot_formatters.py`)
 - Хендлеры и пагинация (`tests/test_bot_handlers.py`)
 - Санити-проверка `help_text.py` и обёртки `run_bot.py`
+- Liveness-проверка `/health` (`tests/test_health.py`)
 - Существующие тесты репозиториев, мапперов, калькулятора и API
+
+## Деплой 24/7
+
+Чтобы бот не падал вместе с компом — есть пять вариантов от
+«бесплатно одной кнопкой» до «VPS за 3 $/мес»:
+
+| Где                | Сложность | Стоимость |
+|--------------------|-----------|-----------|
+| Render.com (Blueprint) | 🟢 | 0 $ |
+| Fly.io (fly.toml)  | 🟡 | 0 $ |
+| Oracle Cloud Free Tier | 🟠 | 0 $ навсегда |
+| VPS (Ubuntu)       | 🟠 | 3–5 $/мес |
+| Свой Windows + Task Scheduler | 🟡 | 0 $ |
+
+Все варианты с пошаговыми командами — в [`DEPLOY.md`](DEPLOY.md).
+TL;DR: для большинства случаев — `Render → New → Blueprint →
+этот репо → вписать BOT_TOKEN → Apply`.
+
+В `deploy/` лежат готовые артефакты: `Dockerfile`, `docker-compose.yml`,
+`render.yaml`, `fly.toml`, systemd-unit-файлы, `install-vps.sh`,
+`install-autostart.ps1` для Windows, SSH-туннель для обхода блокировки
+Telegram.
 
 ## Безопасность
 
