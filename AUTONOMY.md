@@ -135,3 +135,45 @@ token-watchdog обнаружит через 30 мин и пришлёт але�
 - ~~Думать про бота~~ — он сам
 
 **Ты используешь Telegram. Всё остальное — автономно.** 👌
+
+## 🌐 Публичный URL (Cloudflare Tunnel)
+
+Бот доступен из интернета через Cloudflare Quick Tunnel.
+
+**Текущий URL**: см. `/workspace/logs/tunnel_url.txt` (обновляется автоматически)
+
+### Как это работает
+
+- `cloudflared` запущен под supervisord (program: cloudflared)
+- Каждые 30 сек `tunnel-url-sync` читает лог cloudflared и сохраняет URL
+- URL в `/workspace/logs/tunnel_url.txt` — всегда актуальный
+- При рестарте cloudflared URL меняется (это нормально для quick tunnel)
+
+### Использование
+
+```bash
+# Посмотреть текущий URL
+cat /workspace/logs/tunnel_url.txt
+
+# Тест из консоли
+URL=$(cat /workspace/logs/tunnel_url.txt)
+curl -s "$URL/" 
+
+# Изоляция работает через tunnel:
+curl -s "$URL/trades/" -H "X-Telegram-User-Id: 111"
+```
+
+### Чтобы получить постоянный URL
+
+Quick tunnels дают случайный URL при каждом рестарте. Для **постоянного** URL нужен:
+1. Cloudflare аккаунт (бесплатно)
+2. Домен или workers.dev subdomain
+3. Named tunnel через `cloudflared tunnel login`
+
+Инструкция: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+
+### Проксирование только локального API
+
+Cloudflare tunnel проксирует `https://<tunnel-url>/` → `http://127.0.0.1:8000/` (наш API).
+Никаких токенов, никаких регистраций. Только binary cloudflared.
+
