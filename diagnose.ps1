@@ -114,7 +114,9 @@ if (Test-Path app/bot/bot.py) {
 
 # ── 8. Running processes ────────────────────────────────────────
 Section "8. Running processes"
-$botProcs = Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*app/bot/bot.py*" }
+$botProcs = Get-Process python -ErrorAction SilentlyContinue | Where-Object {
+    $_.CommandLine -like "*app/bot/bot.py*" -or $_.CommandLine -like "*run_bot.py*"
+}
 $apiProcs = Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*uvicorn*" }
 if ($botProcs) {
     foreach ($p in $botProcs) { Write-Host "  Bot:  PID=$($p.Id), started=$($p.StartTime)" }

@@ -1,0 +1,61 @@
+# Render Blueprint — деплой в один клик.
+#
+# Как использовать:
+#   1. Залейте этот репозиторий на GitHub (если ещё не там).
+#   2. Зайдите на https://render.com → New → Blueprint.
+#   3. Укажите свой репо, Render подхватит этот файл.
+#   4. На шаге настройки впишите значение BOT_TOKEN (тот, что
+#      получите у @BotFather).
+#   5. Дождитесь сборки. API и бот стартуют автоматически.
+#
+# Что поднимется:
+#   • arb-tracker-api     — FastAPI-сервис (web).
+#   • arb-tracker-bot     — Telegram-бот (background worker).
+#   • arb-tracker-db      — диск для SQLite (на бесплатном плане
+#                            файловая система эфемерная, поэтому
+#                            на проде лучше переключиться на
+#                            PostgreSQL через env DATABASE_URL).
+#
+# На бесплатном тарифе Render оба сервиса засыпают через 15 минут
+# без запросов, но воркер (бот) у Render не засыпает и polling
+# работает непрерывно. Для прод-нагрузки переходите на платный
+# план или используйте Fly.io / VPS.
+
+services:
+  - type: web
+    name: arb-tracker-api
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt openpyxl && python main.py"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        value: "sqlite+aiosqlite:///./data/db.sqlite3"
+      - key: API_URL
+        value: "http://127.0.0.1:8000"
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+
+  - type: worker
+    name: arb-tracker-bot
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt openpyxl"
+    startCommand: "python run_bot.py"
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: API_URL
+        # Render выдаёт web-сервису внутренний адрес в формате
+        # http://<service-name>.onrender.com, но воркеры Render
+        # ходят к web-сервисам по этому DNS-имени. Если не
+        # работает — укажите внешний URL.
+        value: "http://arb-tracker-api.onrender.com"
+      - key: DATABASE_URL
+        value: "sqlite+aiosqlite:///./data/db.sqlite3"
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: BOT_MAX_BACKOFF_SEC
+        value: "60"

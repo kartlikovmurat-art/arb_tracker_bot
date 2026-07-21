@@ -122,8 +122,27 @@ copy .env.example .env
 # Откройте .env и впишите BOT_TOKEN
 .\.venv\Scripts\python.exe main.py        # создаст таблицы
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
-.\.venv\Scripts\python.exe app\bot\bot.py
+.\.venv\Scripts\python.exe run_bot.py     # ← запускайте через обёртку, см. ниже
 ```
+
+### Зачем `run_bot.py` вместо `python app/bot/bot.py`
+
+`run_bot.py` — это supervisor-обёртка с **автоматическим перезапуском**.
+Если бот упадёт (потеря сети, API лёг, исключение в хендлере,
+Telegram вернул 5xx) — он сам поднимется обратно с экспоненциальным
+backoff (1с → 2с → 4с → … → 60с). После успешного старта счётчик
+сбрасывается.
+
+| Способ             | Что произойдёт при падении бота                          |
+|--------------------|----------------------------------------------------------|
+| `app\bot\bot.py`   | Процесс умирает, надо вручную перезапускать              |
+| `run_bot.py`       | Бот сам перезапустится через 1–60с, лог ведётся в bot.log |
+
+Переменные окружения для тюнинга:
+
+- `BOT_MAX_BACKOFF_SEC=60` — потолок задержки между рестартами.
+- `BOT_RESTART_DELAY=5` — фиксированная задержка вместо экспоненты.
+- `LOG_LEVEL=INFO` — подробность логов.
 
 ## Запуск тестов
 
@@ -136,7 +155,31 @@ pytest -q
 - HTTP-клиент бота (`tests/test_bot_api_client.py`)
 - Текстовые форматтеры (`tests/test_bot_formatters.py`)
 - Хендлеры и пагинация (`tests/test_bot_handlers.py`)
+- Санити-проверка `help_text.py` и обёртки `run_bot.py`
+- Liveness-проверка `/health` (`tests/test_health.py`)
 - Существующие тесты репозиториев, мапперов, калькулятора и API
+
+## Деплой 24/7
+
+Чтобы бот не падал вместе с компом — есть пять вариантов от
+«бесплатно одной кнопкой» до «VPS за 3 $/мес»:
+
+| Где                | Сложность | Стоимость |
+|--------------------|-----------|-----------|
+| Render.com (Blueprint) | 🟢 | 0 $ |
+| Fly.io (fly.toml)  | 🟡 | 0 $ |
+| Oracle Cloud Free Tier | 🟠 | 0 $ навсегда |
+| VPS (Ubuntu)       | 🟠 | 3–5 $/мес |
+| Свой Windows + Task Scheduler | 🟡 | 0 $ |
+
+Все варианты с пошаговыми командами — в [`DEPLOY.md`](DEPLOY.md).
+TL;DR: для большинства случаев — `Render → New → Blueprint →
+этот репо → вписать BOT_TOKEN → Apply`.
+
+В `deploy/` лежат готовые артефакты: `Dockerfile`, `docker-compose.yml`,
+`render.yaml`, `fly.toml`, systemd-unit-файлы, `install-vps.sh`,
+`install-autostart.ps1` для Windows, SSH-туннель для обхода блокировки
+Telegram.
 
 ## Безопасность
 

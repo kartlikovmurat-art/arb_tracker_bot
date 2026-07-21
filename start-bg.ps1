@@ -57,15 +57,18 @@ Write-Host "  ok: API is up on http://127.0.0.1:8000" -ForegroundColor Green
 # ── Start bot in background ──────────────────────────────────────
 Write-Host "Starting bot in background (log -> bot.log)..." -ForegroundColor Cyan
 $botDir = (Get-Location).Path
+# Используем run_bot.py — обёртку с авто-перезапуском. Если бот
+# случайно упадёт (сеть, API, баг в хендлере), он сам поднимется
+# обратно с экспоненциальным backoff (1s, 2s, 4s, ..., 60s).
 Start-Process powershell -ArgumentList @(
     "-NoProfile", "-NoExit", "-Command",
-    "cd '$botDir'; python app/bot/bot.py 2>&1 | Tee-Object -FilePath bot.log"
+    "cd '$botDir'; python run_bot.py 2>&1 | Tee-Object -FilePath bot.log"
 ) -WindowStyle Hidden
-Start-Sleep -Seconds 5
+Start-Sleep -Seconds 6
 
 # Verify bot started
 if (Test-Path bot.log) {
-    $logTail = Get-Content bot.log -Tail 8
+    $logTail = Get-Content bot.log -Tail 12
     if ($logTail -match "Bot started|Start polling|Run polling") {
         Write-Host "  ok: bot is polling" -ForegroundColor Green
         Write-Host ""
@@ -73,6 +76,7 @@ if (Test-Path bot.log) {
         Write-Host "  ALL GOOD. Open Telegram -> @arb_tracker_cex_bot" -ForegroundColor Green
         Write-Host "  Logs:  bot.log, api.log" -ForegroundColor Green
         Write-Host "  Stop:  powershell -ExecutionPolicy Bypass -File .\stop.ps1" -ForegroundColor Green
+        Write-Host "  Auto-restart: ENABLED (run_bot.py wrapper)" -ForegroundColor Green
         Write-Host "=================================================" -ForegroundColor Green
     } else {
         Write-Host "ERROR: bot did not start. Log tail:" -ForegroundColor Red

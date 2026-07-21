@@ -77,3 +77,20 @@ async def root():
     return {
         "message": "Arbitrage Tracker API"
     }
+
+
+@app.get("/health")
+async def health():
+    """Liveness/readiness для Render, Fly, k8s, мониторинга.
+
+    Возвращает 200 всегда — даже если БД пустая. Если процесс
+    отвечает, значит uvicorn жив и роутер загружен. Полноценный
+    readiness-check с пингом БД добавим позже, если потребуется.
+    """
+    from datetime import datetime, timezone
+
+    return {
+        "status": "ok",
+        "service": "arb-tracker-api",
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }

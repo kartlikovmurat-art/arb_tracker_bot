@@ -1,0 +1,47 @@
+# Arbitrage Tracker — локальный запуск через Docker.
+# Поднимает API на 127.0.0.1:8000 и бота в отдельном контейнере.
+# Бот автоматически перезапускается при падении (restart: unless-stopped).
+#
+# Перед запуском:
+#   1. cp .env.example .env   и заполните BOT_TOKEN
+#   2. docker compose up -d --build
+# Остановка:
+#   docker compose down
+# Логи:
+#   docker compose logs -f bot
+#   docker compose logs -f api
+
+services:
+  api:
+    build: .
+    container_name: arb_tracker_api
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - arb-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/trades/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  bot:
+    build: .
+    container_name: arb_tracker_bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Внутри docker-compose бот стучится к API по имени сервиса.
+      API_URL: "http://api:8000"
+    depends_on:
+      api:
+        condition: service_healthy
+    command: ["python", "run_bot.py"]
+    volumes:
+      - arb-data:/app/data
+
+volumes:
+  arb-data:
