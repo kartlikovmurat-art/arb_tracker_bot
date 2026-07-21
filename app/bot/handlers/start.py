@@ -1,8 +1,7 @@
 """Приветственное сообщение для /start и любого первого контакта.
 
 Показывает что умеет бот, даёт быстрый доступ к основным действиям
-через inline-кнопки. Можно привязать к командам ``/start``,
-``/help`` и ``startapp=open`` (deep link из Mini App).
+через inline-кнопки. Mini App удалён — только Telegram bot.
 """
 from __future__ import annotations
 
@@ -23,8 +22,8 @@ from app.bot.keyboards import main_menu
 logger = logging.getLogger(__name__)
 
 
-# Текст приветствия. Достаточно подробный, чтобы новый пользователь
-# сразу понял что к чему, и не терялся в первый запуск.
+# Текст приветствия. Подробно, чтобы новый пользователь сразу
+# понял что к чему.
 WELCOME_TEXT = (
     "💼  <b>Arb Tracker</b> — твой личный CRM для арбитража\n"
     "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -45,8 +44,7 @@ WELCOME_TEXT = (
     "изоляция по telegram user id.\n\n"
 
     "💾  Бэкап/импорт JSON, Excel-выгрузка.\n"
-    "🔍  Поиск, фильтры, калькулятор P/L.\n"
-    "🌐  Mini App (веб-интерфейс) — кнопкой ниже.\n\n"
+    "🔍  Поиск, фильтры, калькулятор P/L.\n\n"
 
     "<i>Нажми /help, чтобы увидеть все команды.</i>"
 )
@@ -84,12 +82,6 @@ def welcome_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="🌐  Открыть Mini App",
-                    url="https://t.me/arb_tracker_cex_bot?startapp=open",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
                     text="❓  Все команды",
                     callback_data="welcome:help",
                 ),
@@ -99,11 +91,9 @@ def welcome_keyboard() -> InlineKeyboardMarkup:
 
 
 def register(dp: Dispatcher, api: ApiClient) -> None:  # noqa: ARG001
-    """Подключает /start, /help и callback'и кнопок приветствия."""
+    """Подключает /start и callback'и кнопок приветствия."""
     dp.message.register(cmd_start, CommandStart())
     dp.message.register(cmd_start, Command("start"))
-    # Deep link от Mini App / WebApp
-    dp.message.register(cmd_start, Command("startapp"))
     # Колбэки
     dp.callback_query.register(
         _on_welcome,
@@ -151,20 +141,13 @@ async def _on_welcome(callback: CallbackQuery, api: ApiClient) -> None:  # noqa:
         await callback.message.edit_text(  # type: ignore[union-attr]
             "➕  <b>Добавление сделки</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "Доступно три способа:\n\n"
+            "Доступно два способа:\n\n"
             "📝  <b>Пошаговый ввод</b> — нажми <code>/add_trade</code> "
             "и бот спросит всё по очереди (монета, биржи, цены, "
             "все комиссии, сеть, время удержания, стратегия).\n\n"
-            "⚡  <b>JSON-режим</b> — <code>/add_trade {JSON}</code> одной строкой.\n\n"
-            "🌐  <b>Mini App</b> — кнопка ниже с красивой формой.",
+            "⚡  <b>JSON-режим</b> — <code>/add_trade {JSON}</code> одной строкой.",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="🌐  Открыть Mini App",
-                            url="https://t.me/arb_tracker_cex_bot?startapp=open",
-                        )
-                    ],
                     [
                         InlineKeyboardButton(
                             text="↩ Назад", callback_data="welcome:back"
@@ -175,8 +158,6 @@ async def _on_welcome(callback: CallbackQuery, api: ApiClient) -> None:  # noqa:
         )
     elif action == "trades":
         # Перенаправляем в view.py:cmd_trades
-        from app.bot.handlers.view import cmd_trades
-        # Создаём фейковый объект message через переиспользование api
         from app.bot.api import ApiError
         user_id = callback.from_user.id if callback.from_user else 0
         try:

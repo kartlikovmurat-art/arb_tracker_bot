@@ -11,7 +11,6 @@ from app.bot.keyboards.inline import (
 from app.bot.keyboards.reply import (
     BTN_ADD,
     BTN_ANALYTICS,
-    BTN_APP,
     BTN_BACKUP,
     BTN_CALC,
     BTN_EXPORT,
@@ -34,6 +33,6 @@ __all__ = [
     "trades_pager",
     "BTN_ADD", "BTN_TRADES", "BTN_LAST", "BTN_TODAY", "BTN_WEEK",
     "BTN_STATS", "BTN_ANALYTICS", "BTN_GOAL", "BTN_CALC",
-    "BTN_EXPORT", "BTN_BACKUP", "BTN_HELP", "BTN_APP",
+    "BTN_EXPORT", "BTN_BACKUP", "BTN_HELP",
     "main_reply_keyboard",
 ]

@@ -2,8 +2,6 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from app.api.trades import router as trades_router
 from app.api.statistics import router as statistics_router
@@ -29,7 +27,6 @@ from app.api.export import (
     router as export_router,
 )
 from app.api.extras import router as extras_router
-from app.api.webapp import _WEBAPP_DIR, router as webapp_router
 
 from app.infrastructure.database import create_tables
 
@@ -51,15 +48,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — Mini App хостится на отдельном домене (Mavis website_deploy),
-# а API на Cloudflare Tunnel. Без CORS браузер блокирует fetch().
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Mini App доверяет; X-Telegram-User-Id уже даёт изоляцию
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS не нужен — бот и API живут на одном сервере, cross-origin
+# запросов больше нет. Mini App удалён.
 
 
 # Регистрируем /trades/search и /trades/{id}/complete ДО /trades/{id},
@@ -76,11 +66,7 @@ app.include_router(daily_statistics_router)
 app.include_router(equity_curve_router)
 
 app.include_router(export_router)
-app.include_router(webapp_router)
 
-# Статические файлы мини-приложения (CSS/JS, если появятся).
-if _WEBAPP_DIR.exists():
-    app.mount("/webapp/static", StaticFiles(directory=str(_WEBAPP_DIR)), name="webapp-static")
 
 
 @app.get("/")

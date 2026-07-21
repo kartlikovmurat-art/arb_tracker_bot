@@ -17,7 +17,6 @@ BTN_CALC = "🧮  Калькулятор"
 BTN_EXPORT = "📤  Экспорт"
 BTN_BACKUP = "💾  Бэкап"
 BTN_HELP = "❓  Помощь"
-BTN_APP = "🌐  Mini App"
 
 
 def main_reply_keyboard() -> ReplyKeyboardMarkup:
@@ -43,7 +42,6 @@ def main_reply_keyboard() -> ReplyKeyboardMarkup:
                 KeyboardButton(text=BTN_EXPORT),
                 KeyboardButton(text=BTN_BACKUP),
                 KeyboardButton(text=BTN_HELP),
-                KeyboardButton(text=BTN_APP),
             ],
         ],
         resize_keyboard=True,
