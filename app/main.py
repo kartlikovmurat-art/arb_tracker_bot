@@ -2,6 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.trades import router as trades_router
@@ -48,6 +49,16 @@ app = FastAPI(
     title="Arbitrage Tracker API",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+# CORS — Mini App хостится на отдельном домене (Mavis website_deploy),
+# а API на Cloudflare Tunnel. Без CORS браузер блокирует fetch().
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Mini App доверяет; X-Telegram-User-Id уже даёт изоляцию
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
