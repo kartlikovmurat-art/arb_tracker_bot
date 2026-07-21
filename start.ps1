@@ -46,7 +46,9 @@ try {
 
 # ── Start bot in a new window ───────────────────────────────────
 Write-Host "`nStarting Telegram bot (new window)..." -ForegroundColor Cyan
-$botCmd = "python app/bot/bot.py"
+# run_bot.py — обёртка с авто-перезапуском. Если бот упадёт
+# (сеть, API, баг), он сам поднимется обратно.
+$botCmd = "python run_bot.py"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $botCmd -WindowStyle Normal
 Start-Sleep -Seconds 4
 
@@ -76,5 +78,6 @@ Write-Host @"
   - Open Telegram -> @${($botInfo.result.username)} -> /start
   - To stop everything, close both windows
     or run:  powershell -ExecutionPolicy Bypass -File .\stop.ps1
+  - Auto-restart: ENABLED (run_bot.py wraps the bot)
 ================================================
 "@ -ForegroundColor Green

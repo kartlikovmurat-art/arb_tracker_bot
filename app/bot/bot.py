@@ -265,6 +265,33 @@ async def main() -> None:
         dp.workflow_data.update(api=api)
         register_all(dp, api)
 
+        # Глобальный обработчик ошибок: чтобы одно битое сообщение
+        # не убило диспетчер. Пользователь всегда получит внятный
+        # ответ, а в логах будет полный traceback.
+        @dp.error()
+        async def _on_error(event, exception):  # type: ignore[no-untyped-def]
+            logger.exception(
+                "Unhandled exception in handler: %s",
+                exception,
+                exc_info=exception,
+            )
+            # Пытаемся ответить пользователю там, где это возможно.
+            try:
+                if getattr(event, "message", None):
+                    await event.message.answer(  # type: ignore[union-attr]
+                        "❌  Произошла внутренняя ошибка.\n"
+                        "Попробуй ещё раз или напиши /start."
+                    )
+                elif getattr(event, "callback_query", None) and event.callback_query.message:
+                    await event.callback_query.message.answer(  # type: ignore[union-attr]
+                        "❌  Внутренняя ошибка. Попробуй ещё раз."
+                    )
+                    await event.callback_query.answer()  # type: ignore[union-attr]
+            except Exception:  # noqa: BLE001
+                # Не даём ошибке из error-handler'а выйти наружу.
+                logger.exception("Failed to send error message to user")
+            return True  # Говорим aiogram, что ошибка обработана.
+
         try:
             me = await bot.get_me()
             logger.info("Бот запущен: @%s (id=%s)", me.username, me.id)

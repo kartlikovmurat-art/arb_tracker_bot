@@ -82,7 +82,8 @@ async def cmd_search(message: Message, command: Any, api: ApiClient) -> None:  #
 
 
 # ── /goal ────────────────────────────────────────────────────────
-_GOAL_FILE = Path("/workspace/arb_tracker_bot1_full/.goal.json")
+# Кладём .goal.json рядом с проектом — не в корень диска.
+_GOAL_FILE = Path(__file__).resolve().parents[3] / "data" / ".goal.json"
 
 
 def _load_goal() -> dict:
@@ -95,6 +96,7 @@ def _load_goal() -> dict:
 
 
 def _save_goal(data: dict) -> None:
+    _GOAL_FILE.parent.mkdir(parents=True, exist_ok=True)
     _GOAL_FILE.write_text(json.dumps(data, indent=2))
 
 

@@ -156,9 +156,10 @@ Ok "API on http://127.0.0.1:8000"
 
 # ── 9. Bot in background ────────────────────────────────
 Step "9" "Starting bot in background..."
+# run_bot.py — обёртка с авто-перезапуском.
 Start-Process powershell -ArgumentList @(
     "-NoProfile","-NoExit","-Command",
-    "cd '$dir'; python app/bot/bot.py 2>&1 | Tee-Object -FilePath bot.log"
+    "cd '$dir'; python run_bot.py 2>&1 | Tee-Object -FilePath bot.log"
 ) -WindowStyle Hidden
 Start-Sleep -Seconds 6
 
