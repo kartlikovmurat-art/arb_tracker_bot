@@ -36,7 +36,7 @@ from app.infrastructure.database import create_tables
 # Ensure the DB schema exists when the application module is imported.
 # This avoids failures in test environments where FastAPI lifespan events
 # may not be triggered before the first request.
-asyncio.run(create_tables())
+
 
 
 @asynccontextmanager

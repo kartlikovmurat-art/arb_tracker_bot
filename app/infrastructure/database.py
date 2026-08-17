@@ -1,3 +1,4 @@
+from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -14,6 +15,7 @@ from app.infrastructure.models.trade_model import TradeModel  # noqa: F401
 engine = create_async_engine(
     DATABASE_URL,
     echo=True,
+    poolclass=NullPool,
 )
 
 async_session = async_sessionmaker(
