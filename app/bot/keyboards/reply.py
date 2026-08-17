@@ -43,6 +43,8 @@ def main_reply_keyboard() -> ReplyKeyboardMarkup:
                 KeyboardButton(text=BTN_BACKUP),
                 KeyboardButton(text=BTN_HELP),
             ],
+            [
+            ],
         ],
         resize_keyboard=True,
         one_time_keyboard=False,

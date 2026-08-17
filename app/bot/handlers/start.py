@@ -8,16 +8,17 @@ from __future__ import annotations
 import logging
 
 from aiogram import Dispatcher, F
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import CommandStart
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
+    WebAppInfo,
 )
 
 from app.bot.api import ApiClient, ApiError
-from app.bot.keyboards import main_menu
+from app.bot.keyboards import main_menu, main_reply_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +58,15 @@ WELCOME_PIC_URL = (
 
 
 def welcome_keyboard() -> InlineKeyboardMarkup:
-    """Главное меню приветствия — 4 inline-кнопки на старт."""
+    """Главное приветственное меню."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🚀  Открыть Mini App",
+                    web_app=WebAppInfo(url="https://arb-tracker-miniapp.pages.dev/"),
+                ),
+            ],
             [
                 InlineKeyboardButton(
                     text="➕  Добавить сделку",
@@ -93,7 +100,7 @@ def welcome_keyboard() -> InlineKeyboardMarkup:
 def register(dp: Dispatcher, api: ApiClient) -> None:  # noqa: ARG001
     """Подключает /start и callback'и кнопок приветствия."""
     dp.message.register(cmd_start, CommandStart())
-    dp.message.register(cmd_start, Command("start"))
+
     # Колбэки
     dp.callback_query.register(
         _on_welcome,
@@ -105,16 +112,17 @@ async def cmd_start(
     message: Message,
     command: "CommandStart | None" = None,  # type: ignore[name-defined]
 ) -> None:
-    """Приветствие с картинкой (если доступна) и клавиатурой."""
+    """Приветствие с inline Mini App и постоянной нижней клавиатурой."""
     name = ""
     if message.from_user:
         name = message.from_user.first_name or message.from_user.username or ""
+
     greeting = (
-        f"👋 Привет, <b>{name}</b>!\n\n" if name else "👋 Привет!\n\n"
+        f"👋 Привет, <b>{name}</b>!\\n\\n" if name else "👋 Привет!\\n\\n"
     )
     text = greeting + WELCOME_TEXT
 
-    # Пробуем отправить картинку + текст, fallback — просто текст
+    # Главное сообщение — inline-кнопки, включая Mini App.
     try:
         await message.answer_photo(
             photo=WELCOME_PIC_URL,
@@ -127,6 +135,12 @@ async def cmd_start(
             text,
             reply_markup=welcome_keyboard(),
         )
+
+    # Постоянная нижняя клавиатура.
+    await message.answer(
+        "👇 <b>Панель быстрого доступа</b>",
+        reply_markup=main_reply_keyboard(),
+    )
 
 
 async def _on_welcome(callback: CallbackQuery, api: ApiClient) -> None:  # noqa: ARG001
@@ -212,7 +226,7 @@ async def _on_welcome(callback: CallbackQuery, api: ApiClient) -> None:  # noqa:
     elif action == "back":
         if callback.message is not None:
             await callback.message.edit_text(  # type: ignore[union-attr]
-                WELCOME_TEXT, reply_markup=welcome_keyboard()
+                WELCOME_TEXT, reply_markup=welcome_keyboard(),
             )
 
     await callback.answer()

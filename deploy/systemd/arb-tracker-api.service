@@ -1,0 +1,30 @@
+# /etc/systemd/system/arb-tracker-api.service
+# Установка:
+#   sudo cp deploy/systemd/arb-tracker-api.service /etc/systemd/system/
+#   sudo cp deploy/systemd/arb-tracker-bot.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now arb-tracker-api arb-tracker-bot
+# Логи:
+#   sudo journalctl -u arb-tracker-api -f
+#   sudo journalctl -u arb-tracker-bot -f
+# Остановка:
+#   sudo systemctl stop arb-tracker-{api,bot}
+
+[Unit]
+Description=Arbitrage Tracker — FastAPI service
+After=network.target
+
+[Service]
+Type=simple
+User=arb
+Group=arb
+WorkingDirectory=/opt/arb-tracker
+EnvironmentFile=/opt/arb-tracker/.env
+ExecStart=/opt/arb-tracker/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/log/arb-tracker/api.log
+StandardError=append:/var/log/arb-tracker/api.log
+
+[Install]
+WantedBy=multi-user.target

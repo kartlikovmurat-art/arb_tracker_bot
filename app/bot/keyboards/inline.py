@@ -12,14 +12,22 @@ Callback-data convention (short strings, ``:``-separated):
 """
 from __future__ import annotations
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 
 # ── Главное меню (стартовый экран) ────────────────────────────────────
 def main_menu() -> InlineKeyboardMarkup:
-    """Красивое главное меню: 6 кнопок в две колонки + статус."""
+    """Главное меню бота с запуском Telegram Mini App."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📱  ARB Tracker",
+                    web_app=WebAppInfo(
+                        url="https://disturbed-collection-wonder-bow.trycloudflare.com/miniapp"
+                    ),
+                ),
+            ],
             [
                 InlineKeyboardButton(
                     text="➕  Добавить сделку",

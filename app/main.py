@@ -1,7 +1,10 @@
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.trades import router as trades_router
 from app.api.statistics import router as statistics_router
@@ -47,6 +50,23 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+# Mini App
+WEB_DIR = Path(__file__).resolve().parent / "web"
+
+app.mount(
+    "/static",
+    StaticFiles(directory=WEB_DIR / "static"),
+    name="static",
+)
+
+
+@app.get("/miniapp")
+async def miniapp():
+    return FileResponse(
+        WEB_DIR / "templates" / "index.html"
+    )
 
 # CORS не нужен — бот и API живут на одном сервере, cross-origin
 # запросов больше нет. Mini App удалён.

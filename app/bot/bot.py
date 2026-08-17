@@ -51,7 +51,8 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 import httpx  # noqa: E402
-from aiogram import Bot, Dispatcher  # noqa: E402
+from aiogram import Bot, Dispatcher
+from aiogram.types import MenuButtonWebApp, WebAppInfo  # noqa: E402
 from aiogram.client.session.base import BaseSession  # noqa: E402
 from aiogram.fsm.storage.memory import MemoryStorage  # noqa: E402
 from aiogram.methods import TelegramMethod  # noqa: E402
@@ -295,7 +296,17 @@ async def main() -> None:
         try:
             me = await bot.get_me()
             logger.info("Бот запущен: @%s (id=%s)", me.username, me.id)
-            await dp.start_polling(bot)
+            
+    await bot.set_chat_menu_button(
+        menu_button=MenuButtonWebApp(
+            text="🚀 Mini App",
+            web_app=WebAppInfo(
+                url="https://arb-tracker-miniapp.pages.dev/"
+            ),
+        )
+    )
+
+    await dp.start_polling(bot)
         finally:
             await api.aclose()
             await session.close()
