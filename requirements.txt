@@ -11,3 +11,4 @@ pytest-asyncio
 respx>=0.21
 python-multipart
 matplotlib
+openpyxl==3.1.5
