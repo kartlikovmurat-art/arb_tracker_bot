@@ -4,9 +4,7 @@ services:
     name: arb-tracker-api
     runtime: python
     plan: free
-
     buildCommand: "pip install -r requirements.txt"
-
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
 
     envVars:
@@ -19,22 +17,16 @@ services:
           property: connectionString
 
       - key: API_URL
-        fromService:
-          type: web
-          name: arb-tracker-api
-          envVarKey: RENDER_EXTERNAL_URL
+        value: "https://arb-tracker-api.onrender.com"
 
       - key: PYTHON_VERSION
         value: "3.11.9"
-
 
   - type: worker
     name: arb-tracker-bot
     runtime: python
     plan: free
-
     buildCommand: "pip install -r requirements.txt"
-
     startCommand: "python run_bot.py"
 
     envVars:
@@ -42,10 +34,7 @@ services:
         sync: false
 
       - key: API_URL
-        fromService:
-          type: web
-          name: arb-tracker-api
-          envVarKey: RENDER_EXTERNAL_URL
+        value: "https://arb-tracker-api.onrender.com"
 
       - key: DATABASE_URL
         fromDatabase:
@@ -57,7 +46,6 @@ services:
 
       - key: BOT_MAX_BACKOFF_SEC
         value: "60"
-
 
 databases:
 

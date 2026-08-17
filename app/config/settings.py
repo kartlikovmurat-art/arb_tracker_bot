@@ -22,16 +22,21 @@ if API_URL:
 # If DATABASE_URL is configured to use asyncpg but asyncpg cannot be
 # imported/compiled in this environment, fall back to a local sqlite
 # URL so the API can start for local development and tests.
-if DATABASE_URL.startswith("postgresql+asyncpg"):
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace(
+        "postgresql://",
+        "postgresql+asyncpg://",
+        1,
+    )
+
+if DATABASE_URL.startswith("postgresql+asyncpg://"):
     try:
         import asyncpg  # noqa: F401
     except Exception as exc:
         warnings.warn(
-            f"DATABASE_URL uses asyncpg but asyncpg cannot be imported: {exc}. "
-            "Falling back to sqlite+aiosqlite:///./db.sqlite3.",
+            f"DATABASE_URL uses asyncpg but asyncpg cannot be imported: {exc}.",
             RuntimeWarning,
         )
-        DATABASE_URL = "sqlite+aiosqlite:///./db.sqlite3"
 
 # Normalize local sqlite paths on Windows: ensure three slashes for relative
 # and four for absolute drive paths (sqlite+aiosqlite:///C:/path)
