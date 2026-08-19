@@ -1,6 +1,7 @@
 "use strict";
 
 const tg = window.Telegram?.WebApp;
+const API_BASE = window.ARB_API_BASE || "https://arb-tracker-api.onrender.com";
 const state = { trades: [], current: null, editingId: null, screen: "home" };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -22,7 +23,7 @@ function requestHeaders(json = false) {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(`${API_BASE}${path}`, {
     cache: "no-store",
     ...options,
     headers: { ...requestHeaders(Boolean(options.body) && !(options.body instanceof FormData)), ...(options.headers || {}) },
@@ -271,7 +272,7 @@ async function loadAnalytics() {
 }
 
 function download(path, filename) {
-  fetch(path, { headers: requestHeaders() }).then(async response => {
+  fetch(`${API_BASE}${path}`, { headers: requestHeaders() }).then(async response => {
     if (!response.ok) throw new Error(`Ошибка API ${response.status}`);
     const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement("a");
     link.href = url; link.download = filename; document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(url);
