@@ -296,17 +296,22 @@ async def main() -> None:
         try:
             me = await bot.get_me()
             logger.info("Бот запущен: @%s (id=%s)", me.username, me.id)
-            
-    await bot.set_chat_menu_button(
-        menu_button=MenuButtonWebApp(
-            text="🚀 Mini App",
-            web_app=WebAppInfo(
-                url="https://arb-tracker-miniapp.pages.dev/"
-            ),
-        )
-    )
 
-    await dp.start_polling(bot)
+            mini_app_url = os.getenv("MINI_APP_URL", "").strip()
+            if mini_app_url:
+                await bot.set_chat_menu_button(
+                    menu_button=MenuButtonWebApp(
+                        text="🚀 Mini App",
+                        web_app=WebAppInfo(url=mini_app_url),
+                    )
+                )
+                logger.info("Mini App подключён: %s", mini_app_url)
+            else:
+                logger.warning(
+                    "MINI_APP_URL не задан: кнопка Mini App не установлена"
+                )
+
+            await dp.start_polling(bot)
         finally:
             await api.aclose()
             await session.close()
@@ -323,3 +328,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logger.info("Бот остановлен пользователем.")
+

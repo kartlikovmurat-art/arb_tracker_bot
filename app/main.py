@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -51,6 +52,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://arb-tracker-miniapp.pages.dev",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Content-Type",
+        "X-Telegram-User-Id",
+        "X-Telegram-Init-Data",
+    ],
+)
+
 
 # Mini App
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -68,8 +83,8 @@ async def miniapp():
         WEB_DIR / "templates" / "index.html"
     )
 
-# CORS не нужен — бот и API живут на одном сервере, cross-origin
-# запросов больше нет. Mini App удалён.
+# Mini App размещена на Cloudflare Pages, поэтому доступ к API
+# разрешён только для её production-origin.
 
 
 # Регистрируем /trades/search и /trades/{id}/complete ДО /trades/{id},

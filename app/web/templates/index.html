@@ -1,706 +1,130 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    >
-
-    <title>ARB Tracker</title>
-
-    <link rel="stylesheet" href="/static/app.css">
-
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1020">
+  <title>ARB Tracker</title>
+  <link rel="stylesheet" href="./static/app.css?v=2">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
-
 <body>
-
 <div class="app">
+  <header class="topbar">
+    <div><strong>ARB TRACKER</strong><small>журнал арбитражных сделок</small></div>
+    <span id="api-badge" class="badge">подключение…</span>
+  </header>
 
-    <!-- HEADER -->
-    <header class="header">
-        <div>
-            <div class="brand">ARB TRACKER</div>
-            <div class="subtitle">Trade Journal</div>
-        </div>
+  <main>
+    <section class="screen active" data-screen="home">
+      <article class="hero">
+        <span>ОБЩАЯ ПРИБЫЛЬ</span>
+        <h1 id="home-profit">$0.00</h1>
+        <div><b id="home-roi">0.00%</b><em id="home-count">0 сделок</em></div>
+      </article>
+      <div class="metrics">
+        <article><span>СЕГОДНЯ</span><b id="home-today">$0.00</b></article>
+        <article><span>WIN RATE</span><b id="home-winrate">0.00%</b></article>
+      </div>
+      <section class="panel">
+        <header><b>Последние сделки</b><button data-go="trades">Все →</button></header>
+        <div id="recent-list" class="trade-list"></div>
+      </section>
+      <button class="primary wide" data-add>＋ Добавить сделку</button>
+    </section>
 
-        <div class="status">
-            <span class="status-dot"></span>
-            ONLINE
-        </div>
-    </header>
+    <section class="screen" data-screen="trades">
+      <div class="title"><div><h2>Сделки</h2><small id="trade-count-label">0 записей</small></div><button id="refresh-trades">↻</button></div>
+      <input id="search" class="search" type="search" placeholder="Монета, биржа, стратегия…">
+      <div class="filters">
+        <select id="filter-status"><option value="">Все статусы</option><option>COMPLETED</option><option>PENDING</option><option>CANCELLED</option></select>
+        <select id="filter-type"><option value="">Все типы</option><option>CEX_CEX</option><option>CEX_DEX</option><option>DEX_CEX</option><option>DEX_DEX</option></select>
+        <select id="sort"><option value="date-desc">Новые сначала</option><option value="date-asc">Старые сначала</option><option value="profit-desc">Прибыль ↓</option><option value="profit-asc">Прибыль ↑</option><option value="roi-desc">ROI ↓</option></select>
+      </div>
+      <div id="trade-list" class="trade-list"></div>
+    </section>
 
+    <section class="screen" data-screen="analytics">
+      <div class="title"><div><h2>Аналитика</h2><small>только завершённые сделки</small></div><button id="refresh-analytics">↻</button></div>
+      <div class="metrics four">
+        <article><span>P/L</span><b id="stat-profit">$0.00</b></article>
+        <article><span>ROI</span><b id="stat-roi">0.00%</b></article>
+        <article><span>WIN RATE</span><b id="stat-winrate">0.00%</b></article>
+        <article><span>СДЕЛОК</span><b id="stat-count">0</b></article>
+      </div>
+      <section class="panel"><header><b>Equity curve</b><span id="equity-total">$0.00</span></header><div id="equity-chart" class="chart"></div></section>
+      <section class="panel"><header><b>По монетам</b><span>P/L</span></header><div id="coin-ranking" class="ranking"></div></section>
+      <section class="panel"><header><b>По биржам</b><span>P/L</span></header><div id="exchange-ranking" class="ranking"></div></section>
+      <section class="panel"><header><b>По стратегиям</b><span>P/L</span></header><div id="strategy-ranking" class="ranking"></div></section>
+    </section>
 
-    <!-- TOTAL PROFIT -->
-    <section class="hero-card">
+    <section class="screen" data-screen="data">
+      <div class="title"><div><h2>Данные</h2><small>экспорт и восстановление</small></div></div>
+      <div class="action-list">
+        <button id="export-excel"><b>Excel</b><span>Скачать всю историю в .xlsx</span></button>
+        <button id="export-backup"><b>JSON-бэкап</b><span>Сохранить резервную копию</span></button>
+        <button id="import-backup"><b>Импорт JSON</b><span>Восстановить сделки из файла</span></button>
+        <input id="import-file" type="file" accept="application/json,.json" hidden>
+      </div>
+      <p class="hint">Импорт не удаляет существующие сделки. Дубликаты пропускаются сервером.</p>
+    </section>
 
-        <div class="label">
-            ОБЩАЯ ПРИБЫЛЬ
-        </div>
+    <section class="screen" data-screen="settings">
+      <div class="title"><div><h2>Настройки</h2><small>Telegram Mini App</small></div></div>
+      <section class="panel profile"><div id="avatar">?</div><div><b id="user-name">Вне Telegram</b><span id="user-username">Локальный режим</span><small id="user-id">ID: 0</small></div></section>
+      <section class="panel rows"><p><span>API</span><b id="api-status">Проверка…</b></p><p><span>Версия</span><b>2.0.0</b></p><p><span>Хранилище FSM</span><b>Telegram bot</b></p></section>
+      <button id="check-api" class="secondary wide">Проверить API</button>
+    </section>
+  </main>
 
-        <div class="profit" id="total-profit">
-            $0.00
-        </div>
-
-        <div class="profit-meta">
-            <span id="total-roi">0.00%</span>
-            <span class="positive">● COMPLETED</span>
-        </div>
+  <nav>
+    <button class="active" data-go="home"><span>⌂</span><small>Главная</small></button>
+    <button data-go="trades"><span>☷</span><small>Сделки</small></button>
+    <button class="nav-add" data-add>＋</button>
+    <button data-go="analytics"><span>⌁</span><small>Аналитика</small></button>
+    <button data-go="data"><span>⇩</span><small>Данные</small></button>
+    <button data-go="settings"><span>⚙</span><small>Ещё</small></button>
+  </nav>
 </div>
 
-    </section>
-
-
-    <!-- STATS -->
-    <section class="stats-grid">
-
-        <div class="stat-card">
-            <div class="stat-label">СДЕЛОК</div>
-            <div class="stat-value" id="trade-count">0</div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-label">СЕГОДНЯ</div>
-            <div class="stat-value" id="today-profit">
-                $0.00
-            </div>
-        </div>
-
-    </section>
-<!-- RECENT TRADES -->
-    <section class="panel">
-
-        <div class="panel-header">
-            <span>ПОСЛЕДНИЕ СДЕЛКИ</span>
-            <button id="open-trades">ВСЕ →</button>
-        </div>
-
-        <div id="trades-list">
-
-            <div class="empty-state">
-                <div class="empty-icon">◇</div>
-                <div>Завершённых сделок пока нет</div>
-            </div>
-
-        </div>
-
-    </section>
-
-
-    <!-- ADD TRADE -->
-    <button class="add-button" id="add-trade">
-        <span>＋</span>
-        ДОБАВИТЬ СДЕЛКУ
-    </button>
-
-
-
-    <!-- TRADES VIEW -->
-    <section class="view" id="view-trades">
-
-        <div class="page-title-row">
-            <div>
-                <div class="page-title">Сделки</div>
-                <div class="page-subtitle" id="trades-count-label">0 записей</div>
-            </div>
-            <button class="ghost-button" id="trades-refresh">↻</button>
-        </div>
-
-        <div class="search-box">
-            <span>⌕</span>
-            <input id="trade-search"
-                   type="search"
-                   placeholder="Монета, биржа, стратегия..."
-                   autocomplete="off">
-        </div>
-
-        <div class="filter-grid">
-
-            <select id="filter-status">
-                <option value="">Все статусы</option>
-                <option value="COMPLETED">COMPLETED</option>
-                <option value="PENDING">PENDING</option>
-                <option value="CANCELLED">CANCELLED</option>
-            </select>
-
-            <select id="filter-type">
-                <option value="">Все типы</option>
-                <option value="CEX_CEX">CEX → CEX</option>
-                <option value="CEX_DEX">CEX → DEX</option>
-                <option value="DEX_CEX">DEX → CEX</option>
-                <option value="DEX_DEX">DEX → DEX</option>
-            </select>
-
-            <select id="filter-coin">
-                <option value="">Все монеты</option>
-            </select>
-
-            <select id="filter-exchange">
-                <option value="">Все биржи</option>
-            </select>
-
-        </div>
-
-        <div class="list-meta">
-            <span id="filter-summary">Все сделки</span>
-
-            <select id="filter-sort" class="sort-select">
-                <option value="date-desc">Новые сначала</option>
-                <option value="date-asc">Старые сначала</option>
-                <option value="profit-desc">Прибыль ↓</option>
-                <option value="profit-asc">Прибыль ↑</option>
-                <option value="roi-desc">ROI ↓</option>
-            </select>
-        </div>
-
-        <div id="full-trades-list" class="full-trades-list">
-            <div class="empty-state">
-                <div class="empty-icon">◇</div>
-                <div>Загрузка сделок...</div>
-            </div>
-        </div>
-
-    </section>
-
-
-    <!-- ADD TRADE MODAL -->
-    <div class="modal-backdrop" id="add-trade-backdrop" hidden></div>
-
-    <section
-        class="trade-modal add-trade-modal"
-        id="add-trade-modal"
-        hidden
-        aria-modal="true"
-        role="dialog"
-    >
-        <div class="modal-handle"></div>
-
-        <div class="modal-header">
-            <div>
-                <div class="modal-kicker">НОВАЯ СДЕЛКА</div>
-                <div class="modal-title">Добавить сделку</div>
-            </div>
-
-            <button class="close-button" id="add-trade-close">×</button>
-        </div>
-
-        <form id="trade-form" class="trade-form">
-
-            <div class="form-section-title">ОСНОВНЫЕ ДАННЫЕ</div>
-
-            <div class="form-grid">
-
-                <label class="form-field">
-                    <span>Монета</span>
-                    <input
-                        name="coin"
-                        required
-                        placeholder="BTC"
-                        autocomplete="off"
-                    >
-                </label>
-
-                <label class="form-field">
-                    <span>Объём</span>
-                    <input
-                        name="amount"
-                        required
-                        type="number"
-                        step="any"
-                        min="0"
-                        placeholder="0.5"
-                    >
-                </label>
-
-                <label class="form-field">
-                    <span>Биржа покупки</span>
-                    <input
-                        name="buy_exchange"
-                        required
-                        placeholder="Binance"
-                    >
-                </label>
-
-                <label class="form-field">
-                    <span>Биржа продажи</span>
-                    <input
-                        name="sell_exchange"
-                        required
-                        placeholder="Bybit"
-                    >
-                </label>
-
-                <label class="form-field">
-                    <span>Цена покупки</span>
-                    <input
-                        name="buy_price"
-                        required
-                        type="number"
-                        step="any"
-                        min="0"
-                        placeholder="60000"
-                    >
-                </label>
-
-                <label class="form-field">
-                    <span>Цена продажи</span>
-                    <input
-                        name="sell_price"
-                        required
-                        type="number"
-                        step="any"
-                        min="0"
-                        placeholder="62000"
-                    >
-                </label>
-
-            </div>
-
-            <div class="form-section-title">КОМИССИИ</div>
-
-            <div class="form-grid">
-
-                <label class="form-field">
-                    <span>Комиссия покупки, %</span>
-                    <input
-                        name="buy_fee_percent"
-                        type="number"
-                        step="any"
-                        min="0"
-                        value="0"
-                    >
-                </label>
-
-                <label class="form-field">
-                    <span>Комиссия продажи, %</span>
-                    <input
-                        name="sell_fee_percent"
-                        type="number"
-                        step="any"
-                        min="0"
-                        value="0"
-                    >
-                </label>
-
-                <label class="form-field">
-                    <span>Вывод + сеть, USDT</span>
-                    <input
-                        name="network_fee"
-                        type="number"
-                        step="any"
-                        min="0"
-                        value="0"
-                    >
-                </label>
-
-                <label class="form-field">
-                    <span>Сеть</span>
-                    <input
-                        name="transfer_network"
-                        placeholder="ERC20"
-                    >
-                </label>
-
-            </div>
-
-            <div class="form-section-title">ВРЕМЯ И СТАТУС</div>
-
-            <div class="form-grid">
-
-                <label class="form-field">
-                    <span>Покупка</span>
-                    <input
-                        name="bought_at"
-                        type="datetime-local"
-                    >
-                </label>
-
-                <label class="form-field">
-                    <span>Продажа</span>
-                    <input
-                        name="sold_at"
-                        type="datetime-local"
-                    >
-                </label>
-
-                <label class="form-field">
-                    <span>Тип сделки</span>
-                    <select name="trade_type">
-                        <option value="CEX_CEX">CEX → CEX</option>
-                        <option value="CEX_DEX">CEX → DEX</option>
-                        <option value="DEX_CEX">DEX → CEX</option>
-                        <option value="DEX_DEX">DEX → DEX</option>
-                    </select>
-                </label>
-
-                <label class="form-field">
-                    <span>Статус</span>
-                    <select name="status">
-                        <option value="COMPLETED" selected>Завершена</option>
-                        <option value="PENDING">В процессе</option>
-                        <option value="CANCELLED">Отменена</option>
-                    </select>
-                </label>
-
-            </div>
-
-            <div class="form-section-title">ДОПОЛНИТЕЛЬНО</div>
-
-            <label class="form-field">
-                <span>Стратегия</span>
-                <input
-                    name="strategy"
-                    placeholder="CEX-CEX"
-                >
-            </label>
-
-            <label class="form-field">
-                <span>Комментарий</span>
-                <textarea
-                    name="note"
-                    rows="3"
-                    placeholder="Комментарий по сделке..."
-                ></textarea>
-            </label>
-
-            <div id="trade-form-error" class="form-error" hidden></div>
-
-            <button
-                type="submit"
-                class="submit-trade-button"
-                id="trade-form-submit"
-            >
-                СОХРАНИТЬ СДЕЛКУ
-            </button>
-
-        </form>
-    </section>
-
-
-    <!-- ANALYTICS VIEW -->
-    <section class="view" id="view-stats">
-
-        <div class="page-title-row">
-            <div>
-                <div class="page-title">Аналитика</div>
-                <div class="page-subtitle">Результаты журнала сделок</div>
-            </div>
-
-            <button class="ghost-button" id="stats-refresh">↻</button>
-        </div>
-
-        <div class="analytics-periods">
-            <button class="period-button active" data-period="all">Всё</button>
-            <button class="period-button" data-period="30">30 дней</button>
-            <button class="period-button" data-period="7">7 дней</button>
-        </div>
-
-        <div class="analytics-grid">
-
-            <div class="analytics-card">
-                <div class="analytics-label">P/L</div>
-                <div class="analytics-value" id="stats-profit">$0.00</div>
-            </div>
-
-            <div class="analytics-card">
-                <div class="analytics-label">ROI</div>
-                <div class="analytics-value" id="stats-roi">0.00%</div>
-            </div>
-
-            <div class="analytics-card">
-                <div class="analytics-label">WIN RATE</div>
-                <div class="analytics-value" id="stats-winrate">0.00%</div>
-            </div>
-
-            <div class="analytics-card">
-                <div class="analytics-label">СРЕДНЯЯ СДЕЛКА</div>
-                <div class="analytics-value" id="stats-average">$0.00</div>
-            </div>
-
-        </div>
-
-        <section class="analytics-panel">
-
-            <div class="panel-header">
-                <span>EQUITY CURVE</span>
-                <span class="panel-muted" id="equity-end">$0.00</span>
-            </div>
-
-            <div class="equity-chart" id="equity-chart">
-                <div class="chart-empty">Нет данных</div>
-            </div>
-
-        </section>
-
-        <section class="analytics-panel">
-
-            <div class="panel-header">
-                <span>ПО МОНЕТАМ</span>
-                <span class="panel-muted">P/L</span>
-            </div>
-
-            <div id="coin-stats" class="ranking-list"></div>
-
-        </section>
-
-        <section class="analytics-panel">
-
-            <div class="panel-header">
-                <span>ПО БИРЖАМ</span>
-                <span class="panel-muted">P/L</span>
-            </div>
-
-            <div id="exchange-stats" class="ranking-list"></div>
-
-        </section>
-
-    </section>
-
-
-    
-
-
-    <!-- SETTINGS VIEW -->
-    <section class="view" id="view-settings">
-
-        <div class="page-title-row">
-            <div>
-                <div class="page-title">Настройки</div>
-                <div class="page-subtitle">Параметры Mini App</div>
-            </div>
-        </div>
-
-        <section class="analytics-panel">
-
-            <div class="panel-header">
-                <span>АККАУНТ TELEGRAM</span>
-            </div>
-
-            <div class="settings-account">
-
-                <div class="settings-avatar" id="settings-avatar">—</div>
-
-                <div>
-                    <div class="settings-name" id="settings-name">—</div>
-                    <div class="settings-username" id="settings-username">—</div>
-                    <div class="settings-id" id="settings-user-id">ID: —</div>
-                </div>
-
-            </div>
-
-        </section>
-
-        <section class="analytics-panel">
-
-            <div class="panel-header">
-                <span>СИСТЕМА</span>
-            </div>
-
-            <div class="settings-row">
-                <span>Mini App</span>
-                <strong>ARB Tracker</strong>
-            </div>
-
-            <div class="settings-row">
-                <span>API</span>
-                <strong id="settings-api-status">Проверка...</strong>
-            </div>
-
-            <div class="settings-row">
-                <span>Версия интерфейса</span>
-                <strong>1.0.0</strong>
-            </div>
-
-        </section>
-
-        <button class="settings-action" id="settings-api-check">
-            ПРОВЕРИТЬ API
-        </button>
-
-    </section>
-
-
-
-    <!-- SETTINGS VIEW -->
-    <section class="view" id="view-settings">
-
-        <div class="page-title-row">
-            <div>
-                <div class="page-title">Настройки</div>
-                <div class="page-subtitle">Параметры Mini App</div>
-            </div>
-        </div>
-
-        <section class="analytics-panel">
-
-            <div class="panel-header">
-                <span>АККАУНТ TELEGRAM</span>
-            </div>
-
-            <div class="settings-account">
-
-                <div class="settings-avatar" id="settings-avatar">—</div>
-
-                <div>
-                    <div class="settings-name" id="settings-name">—</div>
-                    <div class="settings-username" id="settings-username">—</div>
-                    <div class="settings-id" id="settings-user-id">ID: —</div>
-                </div>
-
-            </div>
-
-        </section>
-
-        <section class="analytics-panel">
-
-            <div class="panel-header">
-                <span>СИСТЕМА</span>
-            </div>
-
-            <div class="settings-row">
-                <span>Mini App</span>
-                <strong>ARB Tracker</strong>
-            </div>
-
-            <div class="settings-row">
-                <span>API</span>
-                <strong id="settings-api-status">Проверка...</strong>
-            </div>
-
-            <div class="settings-row">
-                <span>Версия интерфейса</span>
-                <strong>1.0.0</strong>
-            </div>
-
-        </section>
-
-        <button class="settings-action" id="settings-api-check">
-            ПРОВЕРИТЬ API
-        </button>
-
-    </section>
-
-
-
-    <!-- SETTINGS VIEW -->
-    <section class="view" id="view-settings">
-
-        <div class="page-title-row">
-            <div>
-                <div class="page-title">Настройки</div>
-                <div class="page-subtitle">Параметры Mini App</div>
-            </div>
-        </div>
-
-        <section class="analytics-panel">
-
-            <div class="panel-header">
-                <span>АККАУНТ TELEGRAM</span>
-            </div>
-
-            <div class="settings-account">
-
-                <div class="settings-avatar" id="settings-avatar">—</div>
-
-                <div>
-                    <div class="settings-name" id="settings-name">—</div>
-                    <div class="settings-username" id="settings-username">—</div>
-                    <div class="settings-id" id="settings-user-id">ID: —</div>
-                </div>
-
-            </div>
-
-        </section>
-
-        <section class="analytics-panel">
-
-            <div class="panel-header">
-                <span>СИСТЕМА</span>
-            </div>
-
-            <div class="settings-row">
-                <span>Mini App</span>
-                <strong>ARB Tracker</strong>
-            </div>
-
-            <div class="settings-row">
-                <span>API</span>
-                <strong id="settings-api-status">Проверка...</strong>
-            </div>
-
-            <div class="settings-row">
-                <span>Версия интерфейса</span>
-                <strong>1.0.0</strong>
-            </div>
-
-        </section>
-
-        <button class="settings-action" id="settings-api-check">
-            ПРОВЕРИТЬ API
-        </button>
-
-    </section>
-
-    <!-- BOTTOM NAV -->
-    <nav class="bottom-nav">
-
-        <button class="nav-item active" data-view="home">
-            <span>⌂</span>
-            <small>Главная</small>
-        </button>
-
-        <button class="nav-item" id="nav-trades" data-view="trades">
-            <span>▤</span>
-            <small>Сделки</small>
-        </button>
-
-        <button class="nav-add" id="nav-add">
-            ＋
-        </button>
-
-        <button class="nav-item" id="nav-stats" data-view="stats">
-            <span>◒</span>
-            <small>Аналитика</small>
-        </button>
-
-        <button class="nav-item" id="nav-settings" data-view="settings">
-            <span>⚙</span>
-            <small>Настройки</small>
-        </button>
-
-    </nav>
-    <div class="modal-backdrop" id="trade-modal-backdrop" hidden></div>
-
-    <section
-        class="trade-modal"
-        id="trade-modal"
-        hidden
-        aria-modal="true"
-        role="dialog"
-    >
-
-        <div class="modal-handle"></div>
-
-        <div class="modal-header">
-
-            <div>
-                <div class="modal-kicker">СДЕЛКА</div>
-                <div class="modal-title" id="modal-title">—</div>
-            </div>
-
-            <button type="button" id="modal-close" class="close-button" aria-label="Закрыть" onclick="event.preventDefault();event.stopPropagation();closeTrade();">×</button>
-
-        </div>
-
-        <div id="modal-body"></div>
-
-    </section>
-
-
-</div>
-
-<script src="/static/app.js?v=1786956963"></script>
-
+<div id="backdrop" class="backdrop" hidden></div>
+<section id="trade-detail" class="sheet" hidden aria-modal="true" role="dialog">
+  <header><div><small>СДЕЛКА</small><h3 id="detail-title">—</h3></div><button data-close>×</button></header>
+  <div id="detail-body"></div>
+</section>
+
+<section id="trade-editor" class="sheet editor" hidden aria-modal="true" role="dialog">
+  <header><div><small id="editor-kicker">НОВАЯ СДЕЛКА</small><h3 id="editor-title">Добавить сделку</h3></div><button data-close>×</button></header>
+  <form id="trade-form">
+    <fieldset><legend>Основные данные</legend><div class="form-grid">
+      <label>Монета<input name="coin" required maxlength="20" placeholder="BTC"></label>
+      <label>Объём<input name="amount" required type="number" min="0" step="any" placeholder="0.1"></label>
+      <label>Биржа покупки<input name="buy_exchange" required maxlength="50" placeholder="Binance"></label>
+      <label>Биржа продажи<input name="sell_exchange" required maxlength="50" placeholder="Bybit"></label>
+      <label>Цена покупки<input name="buy_price" required type="number" min="0" step="any"></label>
+      <label>Цена продажи<input name="sell_price" required type="number" min="0" step="any"></label>
+    </div></fieldset>
+    <fieldset><legend>Комиссии</legend><div class="form-grid">
+      <label>Покупка, %<input name="buy_fee_percent" type="number" min="0" step="any" value="0"></label>
+      <label>Продажа, %<input name="sell_fee_percent" type="number" min="0" step="any" value="0"></label>
+      <label>Сеть, USDT<input name="network_fee" type="number" min="0" step="any" value="0"></label>
+      <label>Проскальзывание<input name="slippage" type="number" min="0" step="any" value="0"></label>
+      <label>Сеть перевода<input name="transfer_network" maxlength="20" placeholder="TRC20"></label>
+    </div></fieldset>
+    <fieldset><legend>Параметры</legend><div class="form-grid">
+      <label>Куплено<input name="bought_at" type="datetime-local"></label>
+      <label>Продано<input name="sold_at" type="datetime-local"></label>
+      <label>Тип<select name="trade_type"><option>CEX_CEX</option><option>CEX_DEX</option><option>DEX_CEX</option><option>DEX_DEX</option></select></label>
+      <label>Статус<select name="status"><option>COMPLETED</option><option>PENDING</option><option>CANCELLED</option></select></label>
+    </div></fieldset>
+    <label>Стратегия<input name="strategy" maxlength="100"></label>
+    <label>Заметка<textarea name="note" maxlength="255" rows="3"></textarea></label>
+    <p id="form-error" class="error" hidden></p>
+    <button id="save-trade" class="primary wide" type="submit">Сохранить</button>
+  </form>
+</section>
+
+<div id="toast" class="toast" hidden></div>
+<script src="./static/app.js?v=2" defer></script>
 </body>
 </html>
