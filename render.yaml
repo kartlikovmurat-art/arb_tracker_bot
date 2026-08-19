@@ -37,7 +37,7 @@ services:
         value: "https://arb-tracker-api.onrender.com"
 
       - key: MINI_APP_URL
-        value: "https://arb-tracker-api.onrender.com/miniapp"
+        value: "https://arb-tracker-miniapp.pages.dev/"
 
       - key: DATABASE_URL
         fromDatabase:
@@ -55,4 +55,3 @@ databases:
   - name: arb-tracker-db
     plan: free
     postgresMajorVersion: "16"
-
