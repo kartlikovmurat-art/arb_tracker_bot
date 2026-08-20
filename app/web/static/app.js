@@ -1,7 +1,7 @@
 "use strict";
 
 const tg = window.Telegram?.WebApp;
-const API_BASE = window.ARB_API_BASE || "https://arb-tracker-api.onrender.com";
+const API_BASE = window.ARB_API_BASE || "https://144-31-63-38.sslip.io";
 const state = { trades: [], current: null, editingId: null, screen: "home" };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
